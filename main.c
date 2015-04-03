@@ -56,6 +56,29 @@ void parent_handler(int signal_code) {
     }
 }
 
+void parent_sigstop(int signal_code) {
+    int ret;
+    has_interrupt = 1;
+
+    if (childpid == 0) {
+        return;
+    }
+
+    if (childpid > 0 && SIGTSTP == signal_code) {
+        ret = kill(childpid, SIGTSTP);
+        if (-1 == ret) {
+            perror("kill() failed");
+            exit(1);
+        } else {
+            printf("\nSuspended child\n");
+        }
+        childpid = 0;
+    }
+
+
+    return;
+}
+
 void read_command() {
     char *line = NULL;
     size_t len = 0;
@@ -163,7 +186,9 @@ int main(int argc, const char *argv[]) {
     char *read, *cs;
     char *exit_str = "exit";
 
+    /* TODO: foolproof? does child inherit? */
     register_sighandler(SIGINT, parent_handler);
+    register_sighandler(SIGTSTP, parent_sigstop);
 
     while (TRUE) {
         /* empty interrupt cache */
