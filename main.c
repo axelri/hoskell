@@ -22,15 +22,44 @@ void read_command() {
     getline(&line, &len, stdin);
 }
 
+void exec_child() {
+
+}
+
+void fork_and_run(char *path, char *args[]) {
+    clock_t t1, t2;
+    int pid, status;
+    char *envp[] = {NULL};
+
+    pid = fork();
+    if (pid < 0) {
+        printf("Unable to fork");
+        return;
+    }
+
+    if (pid != 0) {
+        t1 = clock();
+        printf("Waiting in parent for %d\n", pid);
+        waitpid(pid, &status, 0); /* wait for child */
+        t2 = clock();
+        printf("Execution time: %.2f ms\n", 1000.0*(t2-t1)/CLOCKS_PER_SEC);
+    } else {
+        printf("Executing from child\n");
+        printf("Executing [%s] ...\n", path);
+        if (execve(path, args, envp) == -1) {
+            printf("Error: %s\n", strerror(errno));
+        }
+    }
+
+}
+
 void exec_command(int tokens, char *buf) {
     char *args[(LIMIT/2)+1];
     char *prog;
-    int i, status, pid;
-    clock_t t1, t2;
+    int i;
 
-    char *base = "/bin/";
-    char *full_path;
-    char *envp[] = {NULL};
+    char *path_env = getenv("PATH");
+    char *path, *path_buf;
 
     if (tokens == 1) {
         /* no args */
@@ -61,35 +90,26 @@ void exec_command(int tokens, char *buf) {
     }
     printf("\n");
 
-    pid = fork();
-    if (pid < 0) {
-        printf("Unable to fork");
-        return;
-    }
+    /* try each path folder */
+    path = strtok(path_env, ":");
+    while (path != NULL) {
+        path_buf = malloc(strlen(path)+strlen("/")+strlen(prog)+1);
+        path_buf[0] = '\0';
+        strcat(path_buf, path);
+        strcat(path_buf, "/");
+        strcat(path_buf, prog);
+        printf("Trying %s\n", path_buf);
 
-    if (pid != 0) {
-        t1 = clock();
-        printf("Waiting in parent for %d\n", pid);
-        waitpid(pid, &status, 0); /* wait for child */
-        t2 = clock();
-        printf("Execution time: %.2f ms\n", 1000.0*(t2-t1)/CLOCKS_PER_SEC);
-    } else {
-        printf("Executing from child\n");
+        if (access(path_buf, F_OK) == 0) {
+            printf("Found %s\n", path_buf);
+            args[0] = path_buf; /* by convention */
+            fork_and_run(path_buf, args);
 
-        /* Build full path */
-        full_path = malloc(strlen(base)+strlen(prog)+1);
-        full_path[0] = '\0';
-        strcat(full_path, base);
-        strcat(full_path, prog);
-
-        args[0] = full_path; /* by convention */
-
-        printf("Executing [%s] ...\n", full_path);
-        if (execve(full_path, args, envp) == -1) {
-            printf("Error: %s\n", strerror(errno));
-        } else {
-            printf("Executing..\n");
+            free(path_buf);
+            return;
         }
+
+        path = strtok(NULL, ":");
     }
 }
 
@@ -118,7 +138,7 @@ int main(int argc, const char *argv[]) {
         }
 
         if (strncmp(linebuf, exit_str, strlen(exit_str)) == 0) {
-            printf("Bye!");
+            printf("Bye!\n");
             exit(0);
         }
 
