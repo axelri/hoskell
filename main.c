@@ -6,14 +6,47 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <time.h>
+#include <signal.h>
 
 #define TRUE 1
 #define LIMIT 80
 
 const char *prompt = "> ";
+pid_t childpid;
 
 void type_prompt() {
     printf("%s", prompt);
+}
+
+void register_sighandler(int signal_code, void (*handler) (int sig) ) {
+    int ret;
+    struct sigaction signal_params;
+
+    signal_params.sa_handler = handler;
+    sigemptyset(&signal_params.sa_mask);
+    signal_params.sa_flags = 0;
+
+    ret = sigaction(signal_code, &signal_params, (void *) 0);
+    if ( -1 == ret) {
+        perror("sigaction failed");
+        exit(1);
+    }
+}
+
+void child_handler(int signal_code) {
+    printf("Child interrupt\n");
+}
+
+void parent_handler(int signal_code) {
+    int ret;
+
+    if (childpid > 0 && SIGINT == signal_code) {
+        ret = kill(childpid, SIGKILL);
+        if (-1 == ret) {
+            perror("kill() failed");
+            exit(1);
+        }
+    }
 }
 
 void read_command() {
@@ -22,28 +55,26 @@ void read_command() {
     getline(&line, &len, stdin);
 }
 
-void exec_child() {
-
-}
-
 void fork_and_run(char *path, char *args[]) {
     clock_t t1, t2;
-    int pid, status;
+    int status;
     char *envp[] = {NULL};
 
-    pid = fork();
-    if (pid < 0) {
+    childpid = fork();
+    if (childpid < 0) {
         printf("Unable to fork");
         return;
     }
 
-    if (pid != 0) {
+    if (childpid != 0) {
+        register_sighandler(SIGINT, parent_handler);
         t1 = clock();
-        printf("Waiting in parent for %d\n", pid);
-        waitpid(pid, &status, 0); /* wait for child */
+        printf("Waiting in parent for %d\n", childpid);
+        waitpid(childpid, &status, 0); /* wait for child */
         t2 = clock();
         printf("Execution time: %.2f ms\n", 1000.0*(t2-t1)/CLOCKS_PER_SEC);
     } else {
+        register_sighandler(SIGINT, child_handler);
         printf("Executing from child\n");
         printf("Executing [%s] ...\n", path);
         if (execve(path, args, envp) == -1) {
