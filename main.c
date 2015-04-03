@@ -12,7 +12,8 @@
 #define LIMIT 80
 
 const char *prompt = "> ";
-pid_t childpid;
+pid_t childpid = 0;
+int has_interrupt = 0;
 
 void type_prompt() {
     printf("%s", prompt);
@@ -39,6 +40,11 @@ void child_handler(int signal_code) {
 
 void parent_handler(int signal_code) {
     int ret;
+    has_interrupt = 1;
+
+    if (childpid == 0) {
+        return;
+    }
 
     if (childpid > 0 && SIGINT == signal_code) {
         ret = kill(childpid, SIGKILL);
@@ -46,6 +52,7 @@ void parent_handler(int signal_code) {
             perror("kill() failed");
             exit(1);
         }
+        childpid = 0;
     }
 }
 
@@ -67,12 +74,13 @@ void fork_and_run(char *path, char *args[]) {
     }
 
     if (childpid != 0) {
-        register_sighandler(SIGINT, parent_handler);
         t1 = clock();
         printf("Waiting in parent for %d\n", childpid);
         waitpid(childpid, &status, 0); /* wait for child */
         t2 = clock();
         printf("Execution time: %.2f ms\n", 1000.0*(t2-t1)/CLOCKS_PER_SEC);
+        /* reset childpid */
+        childpid = 0;
     } else {
         register_sighandler(SIGINT, child_handler);
         printf("Executing from child\n");
@@ -89,8 +97,12 @@ void exec_command(int tokens, char *buf) {
     char *prog;
     int i;
 
-    char *path_env = getenv("PATH");
     char *path, *path_buf;
+    char *path_env = getenv("PATH");
+    char *path_cp = malloc(strlen(path_env)+1);
+
+    /* must copy, otherwise ruined by strtok */
+    strcpy(path_cp, path_env);
 
     if (tokens == 1) {
         /* no args */
@@ -122,7 +134,7 @@ void exec_command(int tokens, char *buf) {
     printf("\n");
 
     /* try each path folder */
-    path = strtok(path_env, ":");
+    path = strtok(path_cp, ":");
     while (path != NULL) {
         path_buf = malloc(strlen(path)+strlen("/")+strlen(prog)+1);
         path_buf[0] = '\0';
@@ -140,6 +152,7 @@ void exec_command(int tokens, char *buf) {
             return;
         }
 
+        free(path_buf);
         path = strtok(NULL, ":");
     }
 }
@@ -150,7 +163,11 @@ int main(int argc, const char *argv[]) {
     char *read, *cs;
     char *exit_str = "exit";
 
+    register_sighandler(SIGINT, parent_handler);
+
     while (TRUE) {
+        /* empty interrupt cache */
+        has_interrupt = 0;
         read = NULL;
         cs = NULL;
         tokens = 0;
@@ -160,10 +177,15 @@ int main(int argc, const char *argv[]) {
         if (read == linebuf) {
             printf("Read: %s", linebuf);
         } else {
-            printf("Read nothing\n");
+            printf("\nError or signal\n");
         }
 
         /* handle shell commands */
+        /* end of file - quit */
+        if (feof(stdin)) {
+            printf("Bye!\n");
+            exit(0);
+        }
         if (linebuf[0] == '\n') {
             continue;
         }
@@ -182,6 +204,11 @@ int main(int argc, const char *argv[]) {
         }
         /* last arg ends with newline */
         tokens += 1;
+
+        /* ignore line if interrupt happened */
+        if (has_interrupt) {
+            continue;
+        }
 
         exec_command(tokens, linebuf);
     }
