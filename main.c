@@ -10,16 +10,16 @@
 
 #define TRUE 1
 #define LIMIT 80
+#define DEBUG 1
+#define SIGDET 1
 
 const char *prompt = "> ";
-pid_t childpid = 0;
-int has_interrupt = 0;
 
 void type_prompt() {
     printf("%s", prompt);
 }
 
-void register_sighandler(int signal_code, void (*handler) (int sig) ) {
+void register_sighandler(int signal_code, void (*handler) (int) ) {
     int ret;
     struct sigaction signal_params;
 
@@ -34,80 +34,85 @@ void register_sighandler(int signal_code, void (*handler) (int sig) ) {
     }
 }
 
-void child_handler(int signal_code) {
-    printf("Child interrupt\n");
-}
-
-void parent_handler(int signal_code) {
-    int ret;
-    has_interrupt = 1;
-
-    if (childpid == 0) {
-        return;
+void parent_sigterm(int signal_code) {
+    if (DEBUG) {
+        printf("\nSIGTERM\n");
     }
-
-    if (childpid > 0 && SIGINT == signal_code) {
-        ret = kill(childpid, SIGKILL);
-        if (-1 == ret) {
-            perror("kill() failed");
-            exit(1);
-        }
-        childpid = 0;
-    }
-}
-
-void parent_sigstop(int signal_code) {
-    int ret;
-    has_interrupt = 1;
-
-    if (childpid == 0) {
-        return;
-    }
-
-    if (childpid > 0 && SIGTSTP == signal_code) {
-        ret = kill(childpid, SIGTSTP);
-        if (-1 == ret) {
-            perror("kill() failed");
-            exit(1);
-        } else {
-            printf("\nSuspended child\n");
-        }
-        childpid = 0;
-    }
-
-
     return;
 }
 
-void read_command() {
-    char *line = NULL;
-    size_t len = 0;
-    getline(&line, &len, stdin);
+void parent_sigtstp(int signal_code) {
+    if (DEBUG) {
+        printf("\nSIGTSTP\n");
+    }
+    return;
 }
 
-void fork_and_run(char *path, char *args[]) {
+void parent_sigchld(int signal_code) {
+    int status;
+    waitpid(-1, &status, 0);
+    if (DEBUG) {
+        printf("Bg finished with: %d\n", status);
+    }
+}
+
+void remove_handlers() {
+    register_sighandler(SIGTERM, SIG_DFL);
+    register_sighandler(SIGTSTP, SIG_DFL);
+    register_sighandler(SIGCHLD, SIG_DFL);
+}
+
+void fork_background(char *path, char *args[]) {
+    pid_t pid;
+    char *envp[] = {NULL};
+
+    pid = fork();
+    if (pid < 0) {
+        printf("Unable to fork\n");
+        exit(1);
+    }
+
+    if (pid != 0) {
+        if (DEBUG) {
+            printf("Background process %d\n", pid);
+        }
+    } else {
+        if (DEBUG) {
+            printf("Executing [%s] ...\n", path);
+        }
+        remove_handlers();
+        if (execve(path, args, envp) == -1) {
+            printf("Error: %s\n", strerror(errno));
+        }
+    }
+
+}
+
+void fork_foreground(char *path, char *args[]) {
     clock_t t1, t2;
+    pid_t pid;
     int status;
     char *envp[] = {NULL};
 
-    childpid = fork();
-    if (childpid < 0) {
-        printf("Unable to fork");
-        return;
+    pid = fork();
+    if (pid < 0) {
+        printf("Unable to fork\n");
+        exit(1);
     }
 
-    if (childpid != 0) {
+    if (pid != 0) {
         t1 = clock();
-        printf("Waiting in parent for %d\n", childpid);
-        waitpid(childpid, &status, 0); /* wait for child */
+        if (DEBUG) {
+            printf("Waiting in parent for %d\n", pid);
+        }
+        waitpid(pid, &status, 0); /* wait for child */
         t2 = clock();
         printf("Execution time: %.2f ms\n", 1000.0*(t2-t1)/CLOCKS_PER_SEC);
-        /* reset childpid */
-        childpid = 0;
     } else {
-        register_sighandler(SIGINT, child_handler);
-        printf("Executing from child\n");
-        printf("Executing [%s] ...\n", path);
+        if (DEBUG) {
+            printf("Executing [%s] ...\n", path);
+        }
+        remove_handlers();
         if (execve(path, args, envp) == -1) {
             printf("Error: %s\n", strerror(errno));
         }
@@ -127,6 +132,7 @@ void exec_command(int tokens, char *buf) {
     /* must copy, otherwise ruined by strtok */
     strcpy(path_cp, path_env);
 
+    args[0] = NULL;
     if (tokens == 1) {
         /* no args */
         prog = strtok(buf, "\n");
@@ -146,15 +152,18 @@ void exec_command(int tokens, char *buf) {
     /* must terminate with null pointer */
     args[i] = NULL;
 
-    printf("Prog: %s\n", prog);
-    printf("Args: %d", tokens-1);
-    for(i = 1; i < tokens+1; i++) {
-        printf(", %p", args[i]);
-        if (args[i] != NULL) {
-            printf(" (%s)", args[i]);
+    if (DEBUG) {
+        printf("Prog: %s\n", prog);
+        printf("Args: %d", tokens-1);
+
+        for(i = 1; i < tokens+1; i++) {
+            printf(", %p", args[i]);
+            if (args[i] != NULL) {
+                printf(" (%s)", args[i]);
+            }
         }
+        printf("\n");
     }
-    printf("\n");
 
     /* try each path folder */
     path = strtok(path_cp, ":");
@@ -164,12 +173,23 @@ void exec_command(int tokens, char *buf) {
         strcat(path_buf, path);
         strcat(path_buf, "/");
         strcat(path_buf, prog);
-        printf("Trying %s\n", path_buf);
+        if (DEBUG) {
+            printf("Trying %s\n", path_buf);
+        }
 
         if (access(path_buf, F_OK) == 0) {
-            printf("Found %s\n", path_buf);
+            if (DEBUG) {
+                printf("Found %s\n", path_buf);
+            }
+
             args[0] = path_buf; /* by convention */
-            fork_and_run(path_buf, args);
+            if (strncmp(args[tokens-1], "&", 1) == 0) {
+                /* background flag not arg to program */
+                args[tokens] = NULL;
+                fork_background(path_buf, args);
+            } else {
+                fork_foreground(path_buf, args);
+            }
 
             free(path_buf);
             return;
@@ -184,33 +204,36 @@ int main(int argc, const char *argv[]) {
     char linebuf[LIMIT+1];
     int tokens;
     char *read, *cs;
-    char *exit_str = "exit";
+    const char *exit_str = "exit";
+
+    setenv("TERM", "dumb", 1);
 
     /* TODO: foolproof? does child inherit? */
-    register_sighandler(SIGINT, parent_handler);
-    register_sighandler(SIGTSTP, parent_sigstop);
+    register_sighandler(SIGINT, parent_sigterm);
+    register_sighandler(SIGTSTP, parent_sigtstp);
+    register_sighandler(SIGCHLD, parent_sigchld);
 
     while (TRUE) {
         /* empty interrupt cache */
-        has_interrupt = 0;
         read = NULL;
         cs = NULL;
         tokens = 0;
 
         type_prompt();
         read = fgets(linebuf, LIMIT, stdin);
-        if (read == linebuf) {
-            printf("Read: %s", linebuf);
-        } else {
-            printf("\nError or signal\n");
+        if (read != linebuf) {
+            /* check if the user wants to quit */
+            if (feof(stdin)) {
+                printf("Bye!\n");
+                exit(0);
+            }
+
+            /* ignored interrupt */
+            continue;
         }
 
         /* handle shell commands */
         /* end of file - quit */
-        if (feof(stdin)) {
-            printf("Bye!\n");
-            exit(0);
-        }
         if (linebuf[0] == '\n') {
             continue;
         }
@@ -229,11 +252,6 @@ int main(int argc, const char *argv[]) {
         }
         /* last arg ends with newline */
         tokens += 1;
-
-        /* ignore line if interrupt happened */
-        if (has_interrupt) {
-            continue;
-        }
 
         exec_command(tokens, linebuf);
     }
