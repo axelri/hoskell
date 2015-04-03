@@ -10,7 +10,7 @@
 #define TRUE 1
 #define LIMIT 80
 
-char *prompt = "> ";
+const char *prompt = "> ";
 
 void type_prompt() {
     printf("%s", prompt);
@@ -23,7 +23,7 @@ void read_command() {
 }
 
 void exec_command(int tokens, char *buf) {
-    char *args[LIMIT/2];
+    char *args[(LIMIT/2)+1];
     char *prog;
     int i, status, pid;
     clock_t t1, t2;
@@ -31,20 +31,19 @@ void exec_command(int tokens, char *buf) {
     char *base = "/bin/";
     char *full_path;
     char *envp[] = {NULL};
-    char *path[2];
 
-
-    if (tokens == 0) {
+    if (tokens == 1) {
         /* no args */
         prog = strtok(buf, "\n");
         i = 1;
     } else {
         /* one or more args */
+        /* trim middle args from space */
         prog = strtok(buf, " ");
-        for (i = 1; i < tokens; i++) {
+        for (i = 1; i < tokens-1; i++) {
             args[i] = strtok(NULL, " ");
         }
-        /* trim last arg */
+        /* trim last arg from newline */
         args[i] = strtok(NULL, "\n");
         i += 1;
     }
@@ -53,9 +52,12 @@ void exec_command(int tokens, char *buf) {
     args[i] = NULL;
 
     printf("Prog: %s\n", prog);
-    printf("Args: %d", tokens);
-    for(i = 1; i < tokens+5; i++) {
+    printf("Args: %d", tokens-1);
+    for(i = 1; i < tokens+1; i++) {
         printf(", %p", args[i]);
+        if (args[i] != NULL) {
+            printf(" (%s)", args[i]);
+        }
     }
     printf("\n");
 
@@ -81,11 +83,9 @@ void exec_command(int tokens, char *buf) {
         strcat(full_path, prog);
 
         args[0] = full_path; /* by convention */
-        path[0] = full_path;
-        path[1] = NULL;
 
         printf("Executing [%s] ...\n", full_path);
-        if (execve(path[0], args, envp) == -1) {
+        if (execve(full_path, args, envp) == -1) {
             printf("Error: %s\n", strerror(errno));
         } else {
             printf("Executing..\n");
@@ -94,12 +94,16 @@ void exec_command(int tokens, char *buf) {
 }
 
 int main(int argc, const char *argv[]) {
-    char linebuf[LIMIT];
-    int tokens = 0;
-    char *read;
-    char *cs;
+    char linebuf[LIMIT+1];
+    int tokens;
+    char *read, *cs;
+    char *exit_str = "exit";
 
     while (TRUE) {
+        read = NULL;
+        cs = NULL;
+        tokens = 0;
+
         type_prompt();
         read = fgets(linebuf, LIMIT, stdin);
         if (read == linebuf) {
@@ -108,11 +112,25 @@ int main(int argc, const char *argv[]) {
             printf("Read nothing\n");
         }
 
+        /* handle shell commands */
+        if (linebuf[0] == '\n') {
+            continue;
+        }
+
+        if (strncmp(linebuf, exit_str, strlen(exit_str)) == 0) {
+            printf("Bye!");
+            exit(0);
+        }
+
+        /* execute files */
+        /* count middle arguments */
         cs = strchr(linebuf, ' ');
         while (cs != NULL) {
             tokens += 1;
             cs = strchr(cs+1, ' ');
         }
+        /* last arg ends with newline */
+        tokens += 1;
 
         exec_command(tokens, linebuf);
     }
