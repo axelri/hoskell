@@ -5,6 +5,7 @@
 #include <sys/wait.h>
 #include <errno.h>
 #include <stdlib.h>
+#include <time.h>
 
 #define TRUE 1
 #define LIMIT 80
@@ -25,11 +26,13 @@ void exec_command(int tokens, char *buf) {
     char *args[LIMIT/2];
     char *prog;
     int i, status, pid;
+    clock_t t1, t2;
 
     char *base = "/bin/";
     char *full_path;
     char *envp[] = {NULL};
     char *path[2];
+
 
     if (tokens == 0) {
         /* no args */
@@ -47,7 +50,7 @@ void exec_command(int tokens, char *buf) {
     }
 
     /* must terminate with null pointer */
-    args[i+1] = NULL;
+    args[i] = NULL;
 
     printf("Prog: %s\n", prog);
     printf("Args: %d", tokens);
@@ -63,9 +66,11 @@ void exec_command(int tokens, char *buf) {
     }
 
     if (pid != 0) {
+        t1 = clock();
         printf("Waiting in parent for %d\n", pid);
         waitpid(pid, &status, 0); /* wait for child */
-        printf("Done waiting\n");
+        t2 = clock();
+        printf("Execution time: %.2f ms\n", 1000.0*(t2-t1)/CLOCKS_PER_SEC);
     } else {
         printf("Executing from child\n");
 
