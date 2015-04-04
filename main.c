@@ -13,6 +13,8 @@
 #define DEBUG 1
 #define SIGDET 1
 
+/* current environment, from unistd */
+extern char **environ;
 const char *prompt = "> ";
 
 void type_prompt() {
@@ -48,7 +50,8 @@ void parent_sigtstp(int signal_code) {
     return;
 }
 
-void parent_sigchld(int signal_code) {
+/* send signals manually, rather than relying in sigchld */
+void parent_sigusr(int signal_code) {
     int status;
     waitpid(-1, &status, 0);
     if (DEBUG) {
@@ -59,12 +62,38 @@ void parent_sigchld(int signal_code) {
 void remove_handlers() {
     register_sighandler(SIGTERM, SIG_DFL);
     register_sighandler(SIGTSTP, SIG_DFL);
-    register_sighandler(SIGCHLD, SIG_DFL);
+    register_sighandler(SIGUSR1, SIG_DFL);
 }
 
-void fork_background(char *path, char *args[]) {
+int supervisor(pid_t parent, char *path, char *args[], char *env[]) {
     pid_t pid;
-    char *envp[] = {NULL};
+    int status;
+
+    pid = fork();
+    if (pid < 0) {
+        printf("Unable to fork\n");
+        exit(1);
+    }
+
+    if (pid != 0) {
+        /* send signal signaling background finished */
+        waitpid(pid, &status, 0); /* wait for child */
+        return status;
+
+
+    } else {
+        /* execve will overwrite signal handlers */
+        if (execve(path, args, env) == -1) {
+            printf("Error: %s\n", strerror(errno));
+        }
+        return 0;
+    }
+}
+
+void fork_background(char *path, char *args[], char *env[]) {
+    pid_t pid, parent;
+    int status;
+    parent = getpid();
 
     pid = fork();
     if (pid < 0) {
@@ -81,18 +110,24 @@ void fork_background(char *path, char *args[]) {
             printf("Executing [%s] ...\n", path);
         }
         remove_handlers();
-        if (execve(path, args, envp) == -1) {
+
+        status = supervisor(parent, path, args, env);
+        printf("Begin sending \n");
+        if (kill(parent, SIGUSR1) == -1) {
             printf("Error: %s\n", strerror(errno));
+        } else {
+            printf("Sent signal \n");
         }
+        /* to be caught by parent */
+        exit(status);
     }
 
 }
 
-void fork_foreground(char *path, char *args[]) {
+void fork_foreground(char *path, char *args[], char *env[]) {
     clock_t t1, t2;
     pid_t pid;
     int status;
-    char *envp[] = {NULL};
 
     pid = fork();
     if (pid < 0) {
@@ -112,8 +147,8 @@ void fork_foreground(char *path, char *args[]) {
         if (DEBUG) {
             printf("Executing [%s] ...\n", path);
         }
-        remove_handlers();
-        if (execve(path, args, envp) == -1) {
+        /* execve will overwrite signal handlers */
+        if (execve(path, args, env) == -1) {
             printf("Error: %s\n", strerror(errno));
         }
     }
@@ -185,10 +220,11 @@ void exec_command(int tokens, char *buf) {
             args[0] = path_buf; /* by convention */
             if (strncmp(args[tokens-1], "&", 1) == 0) {
                 /* background flag not arg to program */
-                args[tokens] = NULL;
-                fork_background(path_buf, args);
+                args[tokens-1] = NULL;
+                /* environ = all current env variables */
+                fork_background(path_buf, args, environ);
             } else {
-                fork_foreground(path_buf, args);
+                fork_foreground(path_buf, args, environ);
             }
 
             free(path_buf);
@@ -211,7 +247,7 @@ int main(int argc, const char *argv[]) {
     /* TODO: foolproof? does child inherit? */
     register_sighandler(SIGINT, parent_sigterm);
     register_sighandler(SIGTSTP, parent_sigtstp);
-    register_sighandler(SIGCHLD, parent_sigchld);
+    register_sighandler(SIGUSR1, parent_sigusr);
 
     while (TRUE) {
         /* empty interrupt cache */
