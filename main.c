@@ -1,3 +1,5 @@
+#define _XOPEN_SOURCE
+
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -231,6 +233,7 @@ void exec_command(int tokens, char *buf) {
             return;
         }
 
+        free(path_cp);
         free(path_buf);
         path = strtok(NULL, ":");
     }
