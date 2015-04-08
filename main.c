@@ -232,9 +232,9 @@ int main(int argc, const char *argv[]) {
     char linebuf[LIMIT+1];
     char *read, *cs;
     const char *exit_str = "exit";
-    char ** tokens;
-    char *token;
-    int i, len, bg;
+    char **tokens, **args;
+    char *token, *arg;
+    int i, j, len, bg;
 
     #if SIGDET == 0
     pid_t pid;
@@ -313,7 +313,15 @@ int main(int argc, const char *argv[]) {
         token = tokens[0];
         i = 0;
         while (NULL != token) {
-            printf("Token %d: %s\n", i+1, token);
+            printf("Pipe %d: %s\n", i+1, token);
+            args = tokenize(token, ' ');
+            arg = args[0];
+            j = 0;
+            while (NULL != arg) {
+                printf("Token %d: %s\n", j+1, arg);
+                j += 1;
+                arg = args[j];
+            }
             i += 1;
             token = tokens[i];
         }
