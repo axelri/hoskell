@@ -233,10 +233,10 @@ void exec_command(int tokens, char *buf) {
             return;
         }
 
-        free(path_cp);
         free(path_buf);
         path = strtok(NULL, ":");
     }
+    free(path_cp);
 }
 
 int main(int argc, const char *argv[]) {
