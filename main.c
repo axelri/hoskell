@@ -11,6 +11,7 @@
 #include <signal.h>
 
 #define TRUE 1
+#define FALSE 0
 #define LIMIT 80
 #define DEBUG 1
 #define SIGDET 1
@@ -133,6 +134,68 @@ int tokens_length(char **tokens) {
     return i;
 }
 
+/*
+ * modifies command in-place
+ * return value must be freed
+ */
+char** tokenize(char *command, char delim) {
+    char *cs;
+    char **ret;
+    char *beg;
+    int len;
+    int tokens = 0;
+    int i = 0;
+
+    len = strlen(command);
+
+    /* trim right */
+    while(command[len-1] == '\n' || command[len-1] == ' ') {
+        command[len-1] = '\0';
+        len -= 1;
+    }
+
+    /* trim left */
+    while(command[0] == '\n' || command[0] == ' ') {
+        command[0] = '\0';
+        len -= 1;
+        command += 1;
+    }
+
+    /* execute files */
+    /* count middle arguments */
+    cs = strchr(command, delim);
+    while (cs != NULL) {
+        tokens += 1;
+        cs = strchr(cs+1, delim);
+    }
+
+    tokens += 1;
+    ret = malloc(sizeof(char**)*tokens+1);
+
+    if (tokens == 1) {
+        ret[0] = command;
+    } else {
+        /* one or more args */
+        /* trim middle args from space */
+        beg = command;
+        cs = strchr(beg, delim);
+        i = 0;
+        while(cs != NULL) {
+            /* make every token a string */
+            *cs = '\0';
+            ret[i] = beg;
+            i += 1;
+            beg = cs + 1;
+            cs = strchr(beg, delim);
+        }
+        /* last token is already null-terminated */
+        ret[i] = beg;
+    }
+    ret[i+1] = NULL;
+
+    return ret;
+}
+
 void exec_command(char **tokens) {
     char *path;
     int len;
@@ -165,53 +228,13 @@ void exec_command(char **tokens) {
     }
 }
 
-/* tokenize returns a pointer to a string array with
- * all the tokens of the supplied command char array
- *
- * Modifies command in-place
- * return value needs to be freed
- */
-char ** tokenize(char *command) {
-    char *cs;
-    char **ret;
-    int tokens = 0;
-    int i = 0;
-
-    /* execute files */
-    /* count middle arguments */
-    cs = strchr(command, ' ');
-    while (cs != NULL) {
-        tokens += 1;
-        cs = strchr(cs+1, ' ');
-    }
-
-    tokens += 1;
-    ret = malloc(sizeof(char**)*tokens+1);
-
-    if (tokens == 1) {
-        ret[0] = strtok(command, "\n");
-    } else {
-        /* one or more args */
-        /* trim middle args from space */
-        ret[0] = strtok(command, " ");
-        for (i = 1; i < tokens-1; i++) {
-            ret[i] = strtok(NULL, " ");
-        }
-        /* trim last arg from newline */
-        ret[i] = strtok(NULL, "\n");
-    }
-    ret[i+1] = NULL;
-
-    return ret;
-}
-
 int main(int argc, const char *argv[]) {
     char linebuf[LIMIT+1];
     char *read, *cs;
     const char *exit_str = "exit";
     char ** tokens;
     char *token;
-    int i;
+    int i, len, bg;
 
     #if SIGDET == 0
     pid_t pid;
@@ -230,6 +253,7 @@ int main(int argc, const char *argv[]) {
         read = NULL;
         cs = NULL;
         tokens = 0;
+        bg = FALSE;
 
         /* this macro expands to 0 if not defined */
         #if SIGDET == 0
@@ -271,17 +295,31 @@ int main(int argc, const char *argv[]) {
             exit(0);
         }
 
-        tokens = tokenize(linebuf);
+        /* trim whitespace right */
+        len = strlen(linebuf);
+        while (linebuf[len-1] == '\n' || linebuf[len-1] == ' ') {
+            linebuf[len-1] = '\0';
+            len -= 1;
+        }
+        /* check for background flag */
+        if (linebuf[len-1] == '&') {
+            bg = TRUE;
+            linebuf[len-1] = '\0';
+            len -= 1;
+        }
+
+        printf("Linebuf is '%s'\n", linebuf);
+        tokens = tokenize(linebuf, '|');
         token = tokens[0];
         i = 0;
         while (NULL != token) {
-            printf("Token %d: %s\n", i, token);
+            printf("Token %d: %s\n", i+1, token);
             i += 1;
             token = tokens[i];
         }
 
-        exec_command(tokens);
-        free(tokens);
+        /* exec_command(tokens); */
+        /* free(tokens); */
     }
     return 0;
 }
