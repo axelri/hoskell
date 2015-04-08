@@ -53,11 +53,11 @@ void parent_sigtstp(int signal_code) {
 
 /* send signals manually, rather than relying in sigchld */
 void parent_sigusr(int signal_code) {
+    pid_t pid;
     int status;
-    waitpid(-1, &status, 0);
-    if (DEBUG) {
-        printf("Bg finished with: %d\n", status);
-    }
+
+    pid = waitpid(-1, &status, 0);
+    printf("Process %d finished\n", pid);
 }
 
 void remove_handlers() {
@@ -151,9 +151,9 @@ void fork_foreground(char *path, char *args[]) {
         /* execvp will overwrite signal handlers */
         if (execvp(path, args) == -1) {
             printf("Error: %s\n", strerror(errno));
+            exit(1);
         }
     }
-
 }
 
 void exec_command(int tokens, char *buf) {
