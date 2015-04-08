@@ -15,6 +15,8 @@
 #define LIMIT 80
 #define DEBUG 1
 #define SIGDET 1
+#define PIPE_READ ( 0 )
+#define PIPE_WRITE ( 1 )
 
 /* current environment, from unistd */
 const char *prompt = "> ";
@@ -68,56 +70,6 @@ void parent_sigchld(int signal_code) {
             printf("Signal\n");
         }
         print_child(pid);
-    }
-}
-
-void fork_background(char *path, char *args[]) {
-    pid_t pid;
-
-    pid = fork();
-    if (pid < 0) {
-        fprintf(stderr, "Unable to fork\n");
-        exit(1);
-    }
-
-    if (pid != 0) {
-        if (DEBUG) {
-            printf("Background process %d\n", pid);
-        }
-    } else {
-        if (execvp(path, args) == -1) {
-            fprintf(stderr, "Error: %s\n", strerror(errno));
-        }
-    }
-}
-
-void fork_foreground(char *path, char *args[]) {
-    clock_t t1, t2;
-    pid_t pid;
-    int status;
-
-    pid = fork();
-    if (pid < 0) {
-        fprintf(stderr, "Unable to fork\n");
-        exit(1);
-    }
-
-    if (pid != 0) {
-        t1 = clock();
-        if (DEBUG) {
-            printf("Waiting in parent for %d\n", pid);
-        }
-        sighold(SIGCHLD);
-        waitpid(pid, &status, 0); /* wait for child */
-        t2 = clock();
-        printf("Execution time: %.2f ms\n", 1000.0*(t2-t1)/CLOCKS_PER_SEC);
-        sigrelse(SIGCHLD);
-    } else {
-        /* execvp will overwrite signal handlers */
-        if (execvp(path, args) == -1) {
-            printf("Error: %s\n", strerror(errno));
-            exit(1);
-        }
     }
 }
 
@@ -196,6 +148,130 @@ char** tokenize(char *command, char delim) {
     return ret;
 }
 
+
+
+void fork_background(char *path, char *args[]) {
+    pid_t pid;
+
+    pid = fork();
+    if (pid < 0) {
+        fprintf(stderr, "Unable to fork\n");
+        exit(1);
+    }
+
+    if (pid != 0) {
+        if (DEBUG) {
+            printf("Background process %d\n", pid);
+        }
+    } else {
+        if (execvp(path, args) == -1) {
+            fprintf(stderr, "Error: %s\n", strerror(errno));
+        }
+    }
+}
+
+void fork_foreground(char **pipes) {
+    clock_t t1, t2;
+    pid_t pid;
+    int status, len, i;
+    pid_t *children;
+    int prev_p[2], new_p[2];
+    char **args;
+    char *path;
+
+    i = 0;
+    while (NULL != pipes[i]) i++;
+    len = i;
+    children = malloc(sizeof(pid_t)*len);
+
+    pid = 0;
+    new_p[PIPE_READ] = 0;
+    new_p[PIPE_WRITE] = 0;
+
+    sighold(SIGCHLD);
+    t1 = clock();
+    for (i = 0; i < len; i++) {
+        /* execute this command */
+        args = tokenize(pipes[i], ' ');
+        path = args[0];
+
+        prev_p[PIPE_READ] = new_p[PIPE_READ];
+        prev_p[PIPE_WRITE] = new_p[PIPE_WRITE];
+
+        /* do not create more pipes at the end */
+        if ((len-1) != i) {
+            if (pipe(new_p) == -1) {
+                perror("Cannot create new pipe");
+                exit(1);
+            }
+        }
+
+        pid = fork();
+        if (pid < 0) {
+            fprintf(stderr, "Unable to fork\n");
+            exit(1);
+        }
+
+        if (pid != 0) {
+            /* if in first pipe, there is no read to close */
+            if (0 != i) {
+                /* close the old pipe read, no need for main process
+                 * write is already closed */
+                if (close(prev_p[PIPE_READ]) == -1) {
+                    perror("Cannot close old pipe read in parent\n");
+                    exit(1);
+                }
+            }
+
+            /* no new pipe created if at end */
+            if ((len-1) != i) {
+                /* close the new pipe write, no need for main process
+                 * do not close read yet, as it is needed by a later child */
+                if (close(new_p[PIPE_WRITE]) == -1) {
+                    perror("Cannot close new pipe write in parent\n");
+                    exit(1);
+                }
+            }
+
+            children[i] = pid;
+        } else {
+            /* execvp will overwrite signal handlers */
+
+            /* read from stdin at first */
+            if (0 != i) {
+                /* redirect previous child to stdin */
+                if (dup2(prev_p[PIPE_READ], STDIN_FILENO) == -1) {
+                    perror("Cannot dubplicate prev pipe and stdin");
+                    exit(1);
+                }
+            }
+
+            /* output to stdout at end */
+            if ((len-1) != i) {
+                /* redirect output to next child */
+                if (dup2(new_p[PIPE_WRITE], STDOUT_FILENO) == -1) {
+                        perror("Cannot dubplicate prev pipe and stdout");
+                        exit(1);
+                }
+            }
+
+            if (execvp(path, args) == -1) {
+                printf("Error: %s\n", strerror(errno));
+                exit(1);
+            }
+        }
+    }
+
+    /* wait for each child in order */
+    for (i = 0; i < len; i++) {
+        waitpid(children[i], &status, 0);
+    }
+
+    t2 = clock();
+    printf("Execution time: %.2f ms\n", 1000.0*(t2-t1)/CLOCKS_PER_SEC);
+    sigrelse(SIGCHLD);
+}
+
 void exec_command(char **tokens) {
     char *path;
     int len;
@@ -224,7 +300,7 @@ void exec_command(char **tokens) {
         /* environ = all current env variables */
         fork_background(tokens[0], tokens);
     } else {
-        fork_foreground(tokens[0], tokens);
+        fork_foreground(tokens);
     }
 }
 
@@ -301,6 +377,7 @@ int main(int argc, const char *argv[]) {
             linebuf[len-1] = '\0';
             len -= 1;
         }
+
         /* check for background flag */
         if (linebuf[len-1] == '&') {
             bg = TRUE;
@@ -308,23 +385,23 @@ int main(int argc, const char *argv[]) {
             len -= 1;
         }
 
-        printf("Linebuf is '%s'\n", linebuf);
-        tokens = tokenize(linebuf, '|');
-        token = tokens[0];
-        i = 0;
-        while (NULL != token) {
-            printf("Pipe %d: %s\n", i+1, token);
-            args = tokenize(token, ' ');
-            arg = args[0];
-            j = 0;
-            while (NULL != arg) {
-                printf("Token %d: %s\n", j+1, arg);
-                j += 1;
-                arg = args[j];
-            }
-            i += 1;
-            token = tokens[i];
-        }
+        /* printf("Linebuf is '%s'\n", linebuf); */
+        /* tokens = tokenize(linebuf, '|'); */
+        /* token = tokens[0]; */
+        /* i = 0; */
+        /* while (NULL != token) { */
+        /*     printf("Pipe %d: %s\n", i+1, token); */
+        /*     args = tokenize(token, ' '); */
+        /*     arg = args[0]; */
+        /*     j = 0; */
+        /*     while (NULL != arg) { */
+        /*         printf("Token %d: %s\n", j+1, arg); */
+        /*         j += 1; */
+        /*         arg = args[j]; */
+        /*     } */
+        /*     i += 1; */
+        /*     token = tokens[i]; */
+        /* } */
 
         /* exec_command(tokens); */
         /* free(tokens); */
