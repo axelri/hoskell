@@ -178,6 +178,7 @@ void fork_foreground(char **pipes) {
     int prev_p[2], new_p[2];
     char **args;
     char *path;
+    int opened, closed, waited;
 
     i = 0;
     while (NULL != pipes[i]) i++;
@@ -188,10 +189,17 @@ void fork_foreground(char **pipes) {
     new_p[PIPE_READ] = 0;
     new_p[PIPE_WRITE] = 0;
 
+    opened = 0;
+    closed = 0;
+    waited = 0;
+
     sighold(SIGCHLD);
     t1 = clock();
     for (i = 0; i < len; i++) {
         /* execute this command */
+        if (DEBUG) {
+            printf("Starting pipe [%s] ...\n", pipes[i]);
+        }
         args = tokenize(pipes[i], ' ');
         path = args[0];
 
@@ -204,6 +212,7 @@ void fork_foreground(char **pipes) {
                 perror("Cannot create new pipe");
                 exit(1);
             }
+            opened += 2;
         }
 
         pid = fork();
@@ -221,6 +230,7 @@ void fork_foreground(char **pipes) {
                     perror("Cannot close old pipe read in parent\n");
                     exit(1);
                 }
+                closed += 1;
             }
 
             /* no new pipe created if at end */
@@ -231,6 +241,7 @@ void fork_foreground(char **pipes) {
                     perror("Cannot close new pipe write in parent\n");
                     exit(1);
                 }
+                closed += 1;
             }
 
             children[i] = pid;
@@ -265,10 +276,14 @@ void fork_foreground(char **pipes) {
     /* wait for each child in order */
     for (i = 0; i < len; i++) {
         waitpid(children[i], &status, 0);
+        waited += 1;
     }
 
     t2 = clock();
     printf("Execution time: %.2f ms\n", 1000.0*(t2-t1)/CLOCKS_PER_SEC);
+    printf("Opened: %d\n", opened);
+    printf("Closed: %d\n", closed);
+    printf("Waited: %d\n", waited);
     sigrelse(SIGCHLD);
 }
 
