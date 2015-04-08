@@ -10,10 +10,10 @@
 #include <time.h>
 #include <signal.h>
 
-#define TRUE 1
-#define LIMIT 80
-#define DEBUG 1
-#define SIGDET 1
+#define TRUE ( 1 )
+#define LIMIT ( 80 )
+#define DEBUG ( 1 )
+#define SIGDET ( 1 )
 
 /* current environment, from unistd */
 const char *prompt = "> ";
