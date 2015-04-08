@@ -1,5 +1,5 @@
 CC=clang
-CFLAGS=-pedantic-errors -Wall -std=c89 -O0 -g -c
+CFLAGS=-pedantic-errors -Wall -Werror -std=c89 -O0 -g -c
 PROG=hoskell
 
 all: hoskell
