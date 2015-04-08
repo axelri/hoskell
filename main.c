@@ -13,7 +13,7 @@
 #define TRUE 1
 #define FALSE 0
 #define LIMIT 80
-#define DEBUG 1
+#define DEBUG 0
 #define SIGDET 1
 #define PIPE_READ ( 0 )
 #define PIPE_WRITE ( 1 )
@@ -170,25 +170,25 @@ void fork_background(char *path, char *args[]) {
     }
 }
 
-void fork_foreground(char **pipes) {
-    clock_t t1, t2;
+/*
+ * return value needs to be freed
+ */
+pid_t * setup_pipes(char **pipes) {
+    int i, len;
     pid_t pid;
-    int status, len, i;
     pid_t *children;
-    int prev_p[2], new_p[2];
     char **args;
     char *path;
+    int prev_p[2], new_p[2];
 
     i = 0;
     while (NULL != pipes[i]) i++;
     len = i;
-    children = malloc(sizeof(pid_t)*len);
+    children = malloc(sizeof(pid_t)*(len+1));
 
     new_p[PIPE_READ] = 0;
     new_p[PIPE_WRITE] = 0;
 
-    sighold(SIGCHLD);
-    t1 = clock();
     for (i = 0; i < len; i++) {
         /* execute this command */
         if (DEBUG) {
@@ -264,25 +264,43 @@ void fork_foreground(char **pipes) {
         }
     }
 
+    return children;
+}
+
+void fork_and_run(char **pipes, int bg) {
+    clock_t t1, t2;
+    int status, len, i;
+    pid_t *children;
+
+    children = setup_pipes(pipes);
+
+    if (TRUE == bg) {
+        return;
+    }
+
+    /* wait if foreground */
+    i = 0;
+    while (NULL != pipes[i]) i++;
+    len = i;
+
+    sighold(SIGCHLD);
+    t1 = clock();
+
     /* wait for each child in order */
     for (i = 0; i < len; i++) {
         waitpid(children[i], &status, 0);
     }
+
     t2 = clock();
     printf("Execution time: %.2f ms\n", 1000.0*(t2-t1)/CLOCKS_PER_SEC);
     sigrelse(SIGCHLD);
 }
 
-void exec_command(char **tokens) {
+void exec_command(char **tokens, int bg) {
     char *path;
     int len;
-    int i;
 
     len = tokens_length(tokens);
-    printf("Tokens: %d\n", len);
-    for (i = 0; i < len; i++) {
-        printf("Token %d: '%s'\n", i+1, tokens[i]);
-    }
 
     /* handle shell commands */
     if (strcmp(tokens[0], "") == 0) {
@@ -310,7 +328,7 @@ void exec_command(char **tokens) {
         return;
     }
 
-    fork_foreground(tokens);
+    fork_and_run(tokens, bg);
     /* if (strncmp(tokens[len-1], "&", 1) == 0) { */
     /*     /1* background flag not arg to program *1/ */
     /*     tokens[len-1] = NULL; */
@@ -389,7 +407,7 @@ int main(int argc, const char *argv[]) {
         }
 
         tokens = tokenize(linebuf, '|');
-        exec_command(tokens);
+        exec_command(tokens, bg);
         free(tokens);
     }
     return 0;
