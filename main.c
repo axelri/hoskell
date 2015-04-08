@@ -211,8 +211,6 @@ int main(int argc, const char *argv[]) {
     char *read, *cs;
     const char *exit_str = "exit";
 
-    setenv("TERM", "dumb", 1);
-
     /* TODO: foolproof? does child inherit? */
     register_sighandler(SIGINT, parent_sigterm);
     register_sighandler(SIGTSTP, parent_sigtstp);
