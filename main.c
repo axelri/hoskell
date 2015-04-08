@@ -172,6 +172,7 @@ void fork_foreground(char *path, char *args[]) {
 void exec_command(int tokens, char *buf) {
     char *args[(LIMIT/2)+1];
     char *prog;
+    char *path;
     int i;
 
     args[0] = NULL;
@@ -216,6 +217,22 @@ void exec_command(int tokens, char *buf) {
     } else {
         fork_foreground(prog, args);
     }
+
+    /* CD (Change Directory) */
+    if (strcmp(prog, "cd") == 0) {
+        if (DEBUG) {
+            printf("Change Directory to %s\n", args[1]);
+        }
+
+        if (args[1] == NULL) { 
+            path = getenv("HOME");
+        } else {
+            path = args[1];
+        }
+
+        chdir(path);
+    }
+
 }
 
 int main(int argc, const char *argv[]) {
