@@ -208,16 +208,6 @@ void exec_command(int tokens, char *buf) {
         printf("\n");
     }
 
-    args[0] = prog; /* by convention */
-    if (strncmp(args[tokens-1], "&", 1) == 0) {
-        /* background flag not arg to program */
-        args[tokens-1] = NULL;
-        /* environ = all current env variables */
-        fork_background(prog, args);
-    } else {
-        fork_foreground(prog, args);
-    }
-
     /* CD (Change Directory) */
     if (strcmp(prog, "cd") == 0) {
         if (DEBUG) {
@@ -231,7 +221,19 @@ void exec_command(int tokens, char *buf) {
         }
 
         chdir(path);
+        return;
     }
+
+    args[0] = prog; /* by convention */
+    if (strncmp(args[tokens-1], "&", 1) == 0) {
+        /* background flag not arg to program */
+        args[tokens-1] = NULL;
+        /* environ = all current env variables */
+        fork_background(prog, args);
+    } else {
+        fork_foreground(prog, args);
+    }
+
 
 }
 
