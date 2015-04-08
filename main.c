@@ -79,7 +79,7 @@ int supervisor(pid_t parent, char *path, char *args[]) {
 
     pid = fork();
     if (pid < 0) {
-        printf("Unable to fork\n");
+        fprintf(stderr, "Unable to fork\n");
         exit(1);
     }
 
@@ -92,7 +92,7 @@ int supervisor(pid_t parent, char *path, char *args[]) {
     } else {
         /* execve will overwrite signal handlers */
         if (execvp(path, args) == -1) {
-            printf("Error: %s\n", strerror(errno));
+            fprintf(stderr, "Error: %s\n", strerror(errno));
         }
         return 0;
     }
@@ -107,7 +107,7 @@ void fork_background(char *path, char *args[]) {
 
     pid = fork();
     if (pid < 0) {
-        printf("Unable to fork\n");
+        fprintf(stderr, "Unable to fork\n");
         exit(1);
     }
 
@@ -124,7 +124,7 @@ void fork_background(char *path, char *args[]) {
         status = supervisor(parent, path, args);
         printf("Begin sending \n");
         if (kill(parent, SIGUSR1) == -1) {
-            printf("Error: %s\n", strerror(errno));
+            fprintf(stderr, "Error: %s\n", strerror(errno));
         } else {
             printf("Sent signal \n");
         }
@@ -132,7 +132,7 @@ void fork_background(char *path, char *args[]) {
         exit(status);
         #else
         if (execvp(path, args) == -1) {
-            printf("Error: %s\n", strerror(errno));
+            fprintf(stderr, "Error: %s\n", strerror(errno));
         }
         #endif
     }
@@ -145,7 +145,7 @@ void fork_foreground(char *path, char *args[]) {
 
     pid = fork();
     if (pid < 0) {
-        printf("Unable to fork\n");
+        fprintf(stderr, "Unable to fork\n");
         exit(1);
     }
 
