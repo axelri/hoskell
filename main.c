@@ -108,9 +108,9 @@ void fork_foreground(char *path, char *args[]) {
         }
         sighold(SIGCHLD);
         waitpid(pid, &status, 0); /* wait for child */
-        sigrelse(SIGCHLD);
         t2 = clock();
         printf("Execution time: %.2f ms\n", 1000.0*(t2-t1)/CLOCKS_PER_SEC);
+        sigrelse(SIGCHLD);
     } else {
         /* execvp will overwrite signal handlers */
         if (execvp(path, args) == -1) {
@@ -120,79 +120,98 @@ void fork_foreground(char *path, char *args[]) {
     }
 }
 
-void exec_command(int tokens, char *buf) {
-    char *args[(LIMIT/2)+1];
-    char *prog;
-    char *path;
+int tokens_length(char **tokens) {
     int i;
+    char *token;
 
-    args[0] = NULL;
-    if (tokens == 1) {
-        /* no args */
-        prog = strtok(buf, "\n");
-        i = 1;
-    } else {
-        /* one or more args */
-        /* trim middle args from space */
-        prog = strtok(buf, " ");
-        for (i = 1; i < tokens-1; i++) {
-            args[i] = strtok(NULL, " ");
-        }
-        /* trim last arg from newline */
-        args[i] = strtok(NULL, "\n");
+    i = 0;
+    token = tokens[0];
+    while (NULL != token) {
         i += 1;
+        token = tokens[i];
     }
+    return i;
+}
 
-    /* must terminate with null pointer */
-    args[i] = NULL;
+void exec_command(char **tokens) {
+    char *path;
+    int len;
 
-    if (DEBUG) {
-        printf("Prog: %s\n", prog);
-        printf("Args: %d", tokens-1);
-
-        for(i = 1; i < tokens+1; i++) {
-            printf(", %p", args[i]);
-            if (args[i] != NULL) {
-                printf(" (%s)", args[i]);
-            }
-        }
-        printf("\n");
-    }
+    len = tokens_length(tokens);
 
     /* CD (Change Directory) */
-    if (strcmp(prog, "cd") == 0) {
+    if (strcmp(tokens[0], "cd") == 0) {
         if (DEBUG) {
-            printf("Change Directory to %s\n", args[1]);
+            printf("Change Directory to %s\n", tokens[1]);
         }
 
-        if (args[1] == NULL) { 
+        if (tokens[1] == '\0') {
             path = getenv("HOME");
         } else {
-            path = args[1];
+            path = tokens[1];
         }
 
         chdir(path);
         return;
     }
 
-    args[0] = prog; /* by convention */
-    if (strncmp(args[tokens-1], "&", 1) == 0) {
+    if (strncmp(tokens[len-1], "&", 1) == 0) {
         /* background flag not arg to program */
-        args[tokens-1] = NULL;
+        tokens[len-1] = NULL;
         /* environ = all current env variables */
-        fork_background(prog, args);
+        fork_background(tokens[0], tokens);
     } else {
-        fork_foreground(prog, args);
+        fork_foreground(tokens[0], tokens);
+    }
+}
+
+/* tokenize returns a pointer to a string array with
+ * all the tokens of the supplied command char array
+ *
+ * Modifies command in-place
+ * return value needs to be freed
+ */
+char ** tokenize(char *command) {
+    char *cs;
+    char **ret;
+    int tokens = 0;
+    int i = 0;
+
+    /* execute files */
+    /* count middle arguments */
+    cs = strchr(command, ' ');
+    while (cs != NULL) {
+        tokens += 1;
+        cs = strchr(cs+1, ' ');
     }
 
+    tokens += 1;
+    ret = malloc(sizeof(char**)*tokens+1);
 
+    if (tokens == 1) {
+        ret[0] = strtok(command, "\n");
+    } else {
+        /* one or more args */
+        /* trim middle args from space */
+        ret[0] = strtok(command, " ");
+        for (i = 1; i < tokens-1; i++) {
+            ret[i] = strtok(NULL, " ");
+        }
+        /* trim last arg from newline */
+        ret[i] = strtok(NULL, "\n");
+    }
+    ret[i+1] = NULL;
+
+    return ret;
 }
 
 int main(int argc, const char *argv[]) {
     char linebuf[LIMIT+1];
-    int tokens;
     char *read, *cs;
     const char *exit_str = "exit";
+    char ** tokens;
+    char *token;
+    int i;
 
     #if SIGDET == 0
     pid_t pid;
@@ -252,17 +271,17 @@ int main(int argc, const char *argv[]) {
             exit(0);
         }
 
-        /* execute files */
-        /* count middle arguments */
-        cs = strchr(linebuf, ' ');
-        while (cs != NULL) {
-            tokens += 1;
-            cs = strchr(cs+1, ' ');
+        tokens = tokenize(linebuf);
+        token = tokens[0];
+        i = 0;
+        while (NULL != token) {
+            printf("Token %d: %s\n", i, token);
+            i += 1;
+            token = tokens[i];
         }
-        /* last arg ends with newline */
-        tokens += 1;
 
-        exec_command(tokens, linebuf);
+        exec_command(tokens);
+        free(tokens);
     }
     return 0;
 }
