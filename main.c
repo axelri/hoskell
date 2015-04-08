@@ -13,13 +13,17 @@
 #define TRUE 1
 #define LIMIT 80
 #define DEBUG 1
-#define SIGDET 1
+#define SIGDET 0
 
 /* current environment, from unistd */
 const char *prompt = "> ";
 
 void type_prompt() {
     printf("%s", prompt);
+}
+
+void print_child(pid_t pid) {
+    printf("Process %d finished\n", pid);
 }
 
 void register_sighandler(int signal_code, void (*handler) (int) ) {
@@ -57,7 +61,10 @@ void parent_sigusr(int signal_code) {
     int status;
 
     pid = waitpid(-1, &status, 0);
-    printf("Process %d finished\n", pid);
+    if (DEBUG) {
+        printf("Signal\n");
+    }
+    print_child(pid);
 }
 
 void remove_handlers() {
@@ -93,7 +100,9 @@ int supervisor(pid_t parent, char *path, char *args[]) {
 
 void fork_background(char *path, char *args[]) {
     pid_t pid, parent;
+    #if SIGDET == 1
     int status;
+    #endif
     parent = getpid();
 
     pid = fork();
@@ -110,8 +119,8 @@ void fork_background(char *path, char *args[]) {
         if (DEBUG) {
             printf("Executing [%s] ...\n", path);
         }
+        #if SIGDET == 1
         remove_handlers();
-
         status = supervisor(parent, path, args);
         printf("Begin sending \n");
         if (kill(parent, SIGUSR1) == -1) {
@@ -121,8 +130,12 @@ void fork_background(char *path, char *args[]) {
         }
         /* to be caught by parent */
         exit(status);
+        #else
+        if (execvp(path, args) == -1) {
+            printf("Error: %s\n", strerror(errno));
+        }
+        #endif
     }
-
 }
 
 void fork_foreground(char *path, char *args[]) {
@@ -210,17 +223,40 @@ int main(int argc, const char *argv[]) {
     int tokens;
     char *read, *cs;
     const char *exit_str = "exit";
+    #if SIGDET == 0
+    pid_t pid;
+    int status;
+    #endif
 
     /* TODO: foolproof? does child inherit? */
     register_sighandler(SIGINT, parent_sigterm);
     register_sighandler(SIGTSTP, parent_sigtstp);
-    register_sighandler(SIGUSR1, parent_sigusr);
+
+    #if SIGDET == 1
+        register_sighandler(SIGUSR1, parent_sigusr);
+    #endif
 
     while (TRUE) {
         /* empty interrupt cache */
         read = NULL;
         cs = NULL;
         tokens = 0;
+
+        /* this macro expands to 0 if not defined */
+        #if SIGDET == 0
+        /* poll for child process */
+        while (TRUE) {
+            pid = waitpid(-1, &status, WNOHANG);
+            if (pid > 0) {
+                if (DEBUG) {
+                    printf("Polling\n");
+                }
+                print_child(pid);
+            } else {
+                break;
+            }
+        }
+        #endif
 
         type_prompt();
         read = fgets(linebuf, LIMIT, stdin);
