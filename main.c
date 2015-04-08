@@ -275,8 +275,23 @@ void fork_foreground(char **pipes) {
 void exec_command(char **tokens) {
     char *path;
     int len;
+    int i;
 
     len = tokens_length(tokens);
+    printf("Tokens: %d\n", len);
+    for (i = 0; i < len; i++) {
+        printf("Token %d: '%s'\n", i+1, tokens[i]);
+    }
+
+    /* handle shell commands */
+    if (strcmp(tokens[0], "") == 0) {
+        return;
+    }
+
+    if (strcmp(tokens[0], "exit") == 0) {
+        printf("Bye!\n");
+        exit(0);
+    }
 
     /* CD (Change Directory) */
     if (strcmp(tokens[0], "cd") == 0) {
@@ -294,20 +309,19 @@ void exec_command(char **tokens) {
         return;
     }
 
-    if (strncmp(tokens[len-1], "&", 1) == 0) {
-        /* background flag not arg to program */
-        tokens[len-1] = NULL;
-        /* environ = all current env variables */
-        fork_background(tokens[0], tokens);
-    } else {
-        fork_foreground(tokens);
-    }
+    fork_foreground(tokens);
+    /* if (strncmp(tokens[len-1], "&", 1) == 0) { */
+    /*     /1* background flag not arg to program *1/ */
+    /*     tokens[len-1] = NULL; */
+    /*     /1* environ = all current env variables *1/ */
+    /*     fork_background(tokens[0], tokens); */
+    /* } else { */
+    /* } */
 }
 
 int main(int argc, const char *argv[]) {
     char linebuf[LIMIT+1];
     char *read, *cs;
-    const char *exit_str = "exit";
     char **tokens, **args;
     char *token, *arg;
     int i, j, len, bg;
@@ -360,17 +374,6 @@ int main(int argc, const char *argv[]) {
             continue;
         }
 
-        /* handle shell commands */
-        /* end of file - quit */
-        if (linebuf[0] == '\n') {
-            continue;
-        }
-
-        if (strncmp(linebuf, exit_str, strlen(exit_str)) == 0) {
-            printf("Bye!\n");
-            exit(0);
-        }
-
         /* trim whitespace right */
         len = strlen(linebuf);
         while (linebuf[len-1] == '\n' || linebuf[len-1] == ' ') {
@@ -385,26 +388,9 @@ int main(int argc, const char *argv[]) {
             len -= 1;
         }
 
-        /* printf("Linebuf is '%s'\n", linebuf); */
-        /* tokens = tokenize(linebuf, '|'); */
-        /* token = tokens[0]; */
-        /* i = 0; */
-        /* while (NULL != token) { */
-        /*     printf("Pipe %d: %s\n", i+1, token); */
-        /*     args = tokenize(token, ' '); */
-        /*     arg = args[0]; */
-        /*     j = 0; */
-        /*     while (NULL != arg) { */
-        /*         printf("Token %d: %s\n", j+1, arg); */
-        /*         j += 1; */
-        /*         arg = args[j]; */
-        /*     } */
-        /*     i += 1; */
-        /*     token = tokens[i]; */
-        /* } */
-
-        /* exec_command(tokens); */
-        /* free(tokens); */
+        tokens = tokenize(linebuf, '|');
+        exec_command(tokens);
+        free(tokens);
     }
     return 0;
 }
