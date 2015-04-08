@@ -178,7 +178,6 @@ void fork_foreground(char **pipes) {
     int prev_p[2], new_p[2];
     char **args;
     char *path;
-    int opened, closed, waited;
 
     i = 0;
     while (NULL != pipes[i]) i++;
@@ -324,9 +323,8 @@ void exec_command(char **tokens) {
 int main(int argc, const char *argv[]) {
     char linebuf[LIMIT+1];
     char *read, *cs;
-    char **tokens, **args;
-    char *token, *arg;
-    int i, j, len, bg;
+    char **tokens;
+    int len, bg;
 
     #if SIGDET == 0
     pid_t pid;
