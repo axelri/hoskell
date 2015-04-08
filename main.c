@@ -16,7 +16,6 @@
 #define SIGDET 1
 
 /* current environment, from unistd */
-extern char **environ;
 const char *prompt = "> ";
 
 void type_prompt() {
@@ -67,7 +66,7 @@ void remove_handlers() {
     register_sighandler(SIGUSR1, SIG_DFL);
 }
 
-int supervisor(pid_t parent, char *path, char *args[], char *env[]) {
+int supervisor(pid_t parent, char *path, char *args[]) {
     pid_t pid;
     int status;
 
@@ -85,14 +84,14 @@ int supervisor(pid_t parent, char *path, char *args[], char *env[]) {
 
     } else {
         /* execve will overwrite signal handlers */
-        if (execve(path, args, env) == -1) {
+        if (execvp(path, args) == -1) {
             printf("Error: %s\n", strerror(errno));
         }
         return 0;
     }
 }
 
-void fork_background(char *path, char *args[], char *env[]) {
+void fork_background(char *path, char *args[]) {
     pid_t pid, parent;
     int status;
     parent = getpid();
@@ -113,7 +112,7 @@ void fork_background(char *path, char *args[], char *env[]) {
         }
         remove_handlers();
 
-        status = supervisor(parent, path, args, env);
+        status = supervisor(parent, path, args);
         printf("Begin sending \n");
         if (kill(parent, SIGUSR1) == -1) {
             printf("Error: %s\n", strerror(errno));
@@ -126,7 +125,7 @@ void fork_background(char *path, char *args[], char *env[]) {
 
 }
 
-void fork_foreground(char *path, char *args[], char *env[]) {
+void fork_foreground(char *path, char *args[]) {
     clock_t t1, t2;
     pid_t pid;
     int status;
@@ -149,8 +148,8 @@ void fork_foreground(char *path, char *args[], char *env[]) {
         if (DEBUG) {
             printf("Executing [%s] ...\n", path);
         }
-        /* execve will overwrite signal handlers */
-        if (execve(path, args, env) == -1) {
+        /* execvp will overwrite signal handlers */
+        if (execvp(path, args) == -1) {
             printf("Error: %s\n", strerror(errno));
         }
     }
@@ -161,13 +160,6 @@ void exec_command(int tokens, char *buf) {
     char *args[(LIMIT/2)+1];
     char *prog;
     int i;
-
-    char *path, *path_buf;
-    char *path_env = getenv("PATH");
-    char *path_cp = malloc(strlen(path_env)+1);
-
-    /* must copy, otherwise ruined by strtok */
-    strcpy(path_cp, path_env);
 
     args[0] = NULL;
     if (tokens == 1) {
@@ -202,41 +194,15 @@ void exec_command(int tokens, char *buf) {
         printf("\n");
     }
 
-    /* try each path folder */
-    path = strtok(path_cp, ":");
-    while (path != NULL) {
-        path_buf = malloc(strlen(path)+strlen("/")+strlen(prog)+1);
-        path_buf[0] = '\0';
-        strcat(path_buf, path);
-        strcat(path_buf, "/");
-        strcat(path_buf, prog);
-        if (DEBUG) {
-            printf("Trying %s\n", path_buf);
-        }
-
-        if (access(path_buf, F_OK) == 0) {
-            if (DEBUG) {
-                printf("Found %s\n", path_buf);
-            }
-
-            args[0] = path_buf; /* by convention */
-            if (strncmp(args[tokens-1], "&", 1) == 0) {
-                /* background flag not arg to program */
-                args[tokens-1] = NULL;
-                /* environ = all current env variables */
-                fork_background(path_buf, args, environ);
-            } else {
-                fork_foreground(path_buf, args, environ);
-            }
-
-            free(path_buf);
-            return;
-        }
-
-        free(path_buf);
-        path = strtok(NULL, ":");
+    args[0] = prog; /* by convention */
+    if (strncmp(args[tokens-1], "&", 1) == 0) {
+        /* background flag not arg to program */
+        args[tokens-1] = NULL;
+        /* environ = all current env variables */
+        fork_background(prog, args);
+    } else {
+        fork_foreground(prog, args);
     }
-    free(path_cp);
 }
 
 int main(int argc, const char *argv[]) {
