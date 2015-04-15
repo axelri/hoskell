@@ -328,6 +328,14 @@ void exec_command(char **tokens, int bg) {
         return;
     }
 
+    if (strcmp(tokens[0], "checkEnv") == 0) {
+        if (DEBUG) {
+            printf("Checking environment (printenv | sort | less)\n");
+        }
+
+
+    }
+
     fork_and_run(tokens, bg);
     /* if (strncmp(tokens[len-1], "&", 1) == 0) { */
     /*     /1* background flag not arg to program *1/ */
