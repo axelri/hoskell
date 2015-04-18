@@ -18,7 +18,6 @@
 #define PIPE_READ ( 0 )
 #define PIPE_WRITE ( 1 )
 
-/* current environment, from unistd */
 const char *prompt = "> ";
 
 void type_prompt() {
@@ -44,6 +43,9 @@ void register_sighandler(int signal_code, void (*handler) (int) ) {
     }
 }
 
+/*
+ * Parent handler for SIGTERM
+ */
 void parent_sigterm(int signal_code) {
     if (DEBUG) {
         printf("\nSIGTERM\n");
@@ -51,6 +53,9 @@ void parent_sigterm(int signal_code) {
     return;
 }
 
+/*
+ * Parent handler for SIGTSP
+ */
 void parent_sigtstp(int signal_code) {
     if (DEBUG) {
         printf("\nSIGTSTP\n");
@@ -58,12 +63,16 @@ void parent_sigtstp(int signal_code) {
     return;
 }
 
-/* send signals manually, rather than relying in sigchld */
+/*
+ * Parent handler for SIGCHLD
+ * only registered if signal
+ * flag is set
+ */
 void parent_sigchld(int signal_code) {
     pid_t pid;
     int status;
 
-    /* could be a pending signal which is already resolved */
+    /* could be already resolved in process, therefore no hang */
     pid = waitpid(-1, &status, WNOHANG);
     if (pid > 0) {
         if (DEBUG) {
@@ -73,6 +82,10 @@ void parent_sigchld(int signal_code) {
     }
 }
 
+/*
+ * Utility function to obtain length
+ * of null-terminated token array
+ */
 int tokens_length(char **tokens) {
     int i;
     char *token;
@@ -87,7 +100,11 @@ int tokens_length(char **tokens) {
 }
 
 /*
- * modifies command in-place
+ * Splits the string command on the
+ * character delim in returns an array of
+ * the tokens
+ *
+ * modifies input arguments in-place
  * return value must be freed
  */
 char** tokenize(char *command, char delim) {
@@ -113,7 +130,6 @@ char** tokenize(char *command, char delim) {
         command += 1;
     }
 
-    /* execute files */
     /* count middle arguments */
     cs = strchr(command, delim);
     while (cs != NULL) {
@@ -133,14 +149,17 @@ char** tokenize(char *command, char delim) {
         cs = strchr(beg, delim);
         i = 0;
         while(cs != NULL) {
-            /* make every token a string */
+            /* null-terminate every token string */
             *cs = '\0';
             ret[i] = beg;
+
+            /* prepare next iteration */
             i += 1;
             beg = cs + 1;
             cs = strchr(beg, delim);
         }
-        /* last token is already null-terminated */
+        /* last token is already null-terminated
+         * since 'command' is a string */
         ret[i] = beg;
     }
     ret[i+1] = NULL;
@@ -148,8 +167,11 @@ char** tokenize(char *command, char delim) {
     return ret;
 }
 
-
-
+/*
+ * fork and run the program in path
+ * with the argument vector args
+ * in the background
+ */
 void fork_background(char *path, char *args[]) {
     pid_t pid;
 
@@ -171,6 +193,10 @@ void fork_background(char *path, char *args[]) {
 }
 
 /*
+ * Parse every command in the pipes
+ * string array, start a process for each
+ * command and link them together with pipes
+ *
  * return value needs to be freed
  */
 pid_t * setup_pipes(char **pipes) {
@@ -181,9 +207,7 @@ pid_t * setup_pipes(char **pipes) {
     char *path;
     int prev_p[2], new_p[2];
 
-    i = 0;
-    while (NULL != pipes[i]) i++;
-    len = i;
+    len = tokens_length(pipes);
     children = malloc(sizeof(pid_t)*(len+1));
 
     new_p[PIPE_READ] = 0;
@@ -215,10 +239,10 @@ pid_t * setup_pipes(char **pipes) {
         }
 
         if (pid != 0) {
-            /* if in first pipe, there is no read to close */
+            /* if in first pipe, there is no read entry to close */
             if (0 != i) {
-                /* close the old pipe read, no need for main process
-                 * write is already closed */
+                /* close the old pipe read entry in main process
+                 * the old pipe write entry is already closed */
                 if (close(prev_p[PIPE_READ]) == -1) {
                     perror("Cannot close old pipe read in parent\n");
                     exit(1);
@@ -227,8 +251,8 @@ pid_t * setup_pipes(char **pipes) {
 
             /* no new pipe created if at end */
             if ((len-1) != i) {
-                /* close the new pipe write, no need for main process
-                 * do not close read yet, as it is needed by a later child */
+                /* close the new pipe write in main process
+                 * do not close read yet, as it is needed later by a child */
                 if (close(new_p[PIPE_WRITE]) == -1) {
                     perror("Cannot close new pipe write in parent\n");
                     exit(1);
@@ -237,20 +261,19 @@ pid_t * setup_pipes(char **pipes) {
 
             children[i] = pid;
         } else {
-            /* execvp will overwrite signal handlers */
 
-            /* read from stdin at first */
+            /* always read from stdin at start */
             if (0 != i) {
-                /* redirect previous child to stdin */
+                /* redirect stdin of previous child to pipe */
                 if (dup2(prev_p[PIPE_READ], STDIN_FILENO) == -1) {
                     perror("Cannot dubplicate prev pipe and stdin");
                     exit(1);
                 }
             }
 
-            /* output to stdout at end */
+            /* always write to stdout at end */
             if ((len-1) != i) {
-                /* redirect output to next child */
+                /* redirect output to pipe of next child */
                 if (dup2(new_p[PIPE_WRITE], STDOUT_FILENO) == -1) {
                         perror("Cannot dubplicate prev pipe and stdout");
                         exit(1);
@@ -267,22 +290,28 @@ pid_t * setup_pipes(char **pipes) {
     return children;
 }
 
+/*
+ * Run the commands in pipes and wait for the
+ * child processes to finish. Return instantly
+ * if the background flag is set
+ */
 void fork_and_run(char **pipes, int bg) {
     clock_t t1, t2;
     int status, len, i;
     pid_t *children;
 
+    /* setup child processes and link together with pipes */
     children = setup_pipes(pipes);
 
+    /* don't wait if background flag is set */
     if (TRUE == bg) {
         return;
     }
 
-    /* wait if foreground */
-    i = 0;
-    while (NULL != pipes[i]) i++;
-    len = i;
+    len = tokens_length(pipes);
 
+    /* block SIGCHLD signal, as we want the wait to be
+     * handled synchronously */
     sighold(SIGCHLD);
     t1 = clock();
 
@@ -296,32 +325,40 @@ void fork_and_run(char **pipes, int bg) {
     sigrelse(SIGCHLD);
 }
 
+/*
+ * Interpret the user input as either
+ * a shell command or a program to be run
+ */
 void exec_command(char **tokens, int bg) {
-    char *path;
+    char *path, *first, **firstparsed;
     int len;
 
     len = tokens_length(tokens);
 
-    /* handle shell commands */
-    if (strcmp(tokens[0], "") == 0) {
+    /* copy the first command string and handle
+     * this case specially - it might be a shell command */
+    first = malloc(sizeof(char)*strlen(tokens[0]+1));
+    firstparsed = tokenize(first, ' ');
+
+    if (strcmp(firstparsed[0], "") == 0) {
         return;
     }
 
-    if (strcmp(tokens[0], "exit") == 0) {
+    if (strcmp(firstparsed[0], "exit") == 0) {
         printf("Bye!\n");
         exit(0);
     }
 
-    /* CD (Change Directory) */
-    if (strcmp(tokens[0], "cd") == 0) {
+    if (strcmp(firstparsed[0], "cd") == 0) {
         if (DEBUG) {
-            printf("Change Directory to %s\n", tokens[1]);
+            printf("Change Directory to %s\n", firstparsed[1]);
         }
 
-        if (tokens[1] == '\0') {
+        if (firstparsed[1] == '\0') {
+            /* default dir to change to */
             path = getenv("HOME");
         } else {
-            path = tokens[1];
+            path = firstparsed[1];
         }
 
         chdir(path);
@@ -365,13 +402,11 @@ int main(int argc, const char *argv[]) {
     #endif
 
     while (TRUE) {
-        /* empty interrupt cache */
         read = NULL;
         cs = NULL;
         tokens = 0;
         bg = FALSE;
 
-        /* this macro expands to 0 if not defined */
         #if SIGDET == 0
         /* poll for child process */
         while (TRUE) {
@@ -396,7 +431,7 @@ int main(int argc, const char *argv[]) {
                 exit(0);
             }
 
-            /* ignored interrupt */
+            /* some interrupt, proceed to next read */
             continue;
         }
 
