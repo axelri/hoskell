@@ -82,6 +82,18 @@ void parent_sigchld(int signal_code) {
     }
 }
 
+void poll_childs() {
+    pid_t pid;
+    int status;
+
+    if (DEBUG) {
+        printf("Polling\n");
+    }
+    while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+        print_child(pid);
+    }
+}
+
 /*
  * Utility function to obtain length
  * of null-terminated token array
@@ -311,6 +323,7 @@ void fork_and_run(char **pipes, int bg) {
 void exec_command(char **tokens, int bg) {
     char *path, *first, **firstparsed;
     int len;
+    pid_t parent;
 
     len = tokens_length(tokens);
 
@@ -325,6 +338,23 @@ void exec_command(char **tokens, int bg) {
     }
 
     if (strcmp(firstparsed[0], "exit") == 0) {
+        /* try to terminate all childs before exiting */
+
+        /* send term to whole group, but ignore in parent */
+        register_sighandler(SIGTERM, SIG_IGN);
+        parent = getpid();
+        sighold(SIGCHLD);
+
+        /* give processes a chance to finish */
+        if (kill(-parent, SIGTERM) == -1) {
+            printf("Error: %s\n", strerror(errno));
+            exit(1);
+        }
+        sleep(1);
+
+        poll_childs();
+        sigrelse(SIGCHLD);
+
         printf("Bye!\n");
         exit(0);
     }
@@ -384,18 +414,7 @@ int main(int argc, const char *argv[]) {
         bg = FALSE;
 
         #if SIGDET == 0
-        /* poll for child process */
-        while (TRUE) {
-            pid = waitpid(-1, &status, WNOHANG);
-            if (pid > 0) {
-                if (DEBUG) {
-                    printf("Polling\n");
-                }
-                print_child(pid);
-            } else {
-                break;
-            }
-        }
+        poll_childs();
         #endif
 
         type_prompt();
