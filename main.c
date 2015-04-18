@@ -168,31 +168,6 @@ char** tokenize(char *command, char delim) {
 }
 
 /*
- * fork and run the program in path
- * with the argument vector args
- * in the background
- */
-void fork_background(char *path, char *args[]) {
-    pid_t pid;
-
-    pid = fork();
-    if (pid < 0) {
-        fprintf(stderr, "Unable to fork\n");
-        exit(1);
-    }
-
-    if (pid != 0) {
-        if (DEBUG) {
-            printf("Background process %d\n", pid);
-        }
-    } else {
-        if (execvp(path, args) == -1) {
-            fprintf(stderr, "Error: %s\n", strerror(errno));
-        }
-    }
-}
-
-/*
  * Parse every command in the pipes
  * string array, start a process for each
  * command and link them together with pipes
@@ -361,26 +336,22 @@ void exec_command(char **tokens, int bg) {
             path = firstparsed[1];
         }
 
-        chdir(path);
+        if (chdir(path) == -1) {
+            fprintf(stderr, "Error: %s\n", strerror(errno));
+        };
         return;
     }
 
-    if (strcmp(tokens[0], "checkEnv") == 0) {
+    if (strcmp(firstparsed[0], "checkEnv") == 0) {
         if (DEBUG) {
             printf("Checking environment (printenv | sort | less)\n");
         }
-
-
+        return;
     }
 
+    free(first);
+    free(firstparsed);
     fork_and_run(tokens, bg);
-    /* if (strncmp(tokens[len-1], "&", 1) == 0) { */
-    /*     /1* background flag not arg to program *1/ */
-    /*     tokens[len-1] = NULL; */
-    /*     /1* environ = all current env variables *1/ */
-    /*     fork_background(tokens[0], tokens); */
-    /* } else { */
-    /* } */
 }
 
 int main(int argc, const char *argv[]) {
