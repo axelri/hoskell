@@ -13,7 +13,7 @@
 #define TRUE 1
 #define FALSE 0
 #define LIMIT 80
-#define DEBUG 0
+#define DEBUG 1
 #define SIGDET 1
 #define PIPE_READ ( 0 )
 #define PIPE_WRITE ( 1 )
@@ -235,6 +235,7 @@ pid_t * setup_pipes(char **pipes) {
             }
 
             children[i] = pid;
+            free(args);
         } else {
 
             /* always read from stdin at start */
@@ -280,6 +281,7 @@ void fork_and_run(char **pipes, int bg) {
 
     /* don't wait if background flag is set */
     if (TRUE == bg) {
+        free(children);
         return;
     }
 
@@ -298,6 +300,8 @@ void fork_and_run(char **pipes, int bg) {
     t2 = clock();
     printf("Execution time: %.2f ms\n", 1000.0*(t2-t1)/CLOCKS_PER_SEC);
     sigrelse(SIGCHLD);
+
+    free(children);
 }
 
 /*
@@ -312,7 +316,8 @@ void exec_command(char **tokens, int bg) {
 
     /* copy the first command string and handle
      * this case specially - it might be a shell command */
-    first = malloc(sizeof(char)*strlen(tokens[0]+1));
+    first = malloc(sizeof(char)*strlen(tokens[0])+1);
+    strcpy(first, tokens[0]);
     firstparsed = tokenize(first, ' ');
 
     if (strcmp(firstparsed[0], "") == 0) {
@@ -325,15 +330,15 @@ void exec_command(char **tokens, int bg) {
     }
 
     if (strcmp(firstparsed[0], "cd") == 0) {
-        if (DEBUG) {
-            printf("Change Directory to %s\n", firstparsed[1]);
-        }
-
         if (firstparsed[1] == '\0') {
             /* default dir to change to */
             path = getenv("HOME");
         } else {
             path = firstparsed[1];
+        }
+
+        if (DEBUG) {
+            printf("Change Directory to %s\n", path);
         }
 
         if (chdir(path) == -1) {
