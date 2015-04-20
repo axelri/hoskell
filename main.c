@@ -263,8 +263,8 @@ pid_t * setup_pipes(char **pipes) {
             if ((len-1) != i) {
                 /* redirect output to pipe of next child */
                 if (dup2(new_p[PIPE_WRITE], STDOUT_FILENO) == -1) {
-		    perror("Cannot dubplicate prev pipe and stdout");
-		    exit(1);
+            perror("Cannot dubplicate prev pipe and stdout");
+            exit(1);
                 }
             }
 
@@ -334,16 +334,16 @@ void exec_command(char **tokens, int bg) {
     firstparsed = tokenize(first, ' ');
 
     if (strcmp(firstparsed[0], "") == 0) {
-	free(first);
-	free(firstparsed);
-	free(tokens);
+        free(first);
+        free(firstparsed);
+        free(tokens);
         return;
     }
 
     if (strcmp(firstparsed[0], "exit") == 0) {
-	free(first);
-	free(firstparsed);
-	free(tokens);
+        free(first);
+        free(firstparsed);
+        free(tokens);
         /* try to terminate all childs before exiting */
 
         /* send term to whole group, but ignore in parent */
@@ -381,63 +381,79 @@ void exec_command(char **tokens, int bg) {
             fprintf(stderr, "Error: %s\n", strerror(errno));
         }
 
-	free(first);
-	free(firstparsed);
-	free(tokens);
+        free(first);
+        free(firstparsed);
+        free(tokens);
         return;
     }
 
     if (strcmp(firstparsed[0], "checkEnv") == 0) {
-	pager = getenv("PAGER");
+        pager = getenv("PAGER");
 
-	if (pager == NULL) {
-	    pathenv = getenv("PATH"); 
-	    pathcp = malloc(strlen(pathenv)+1);
-	    strcpy(pathcp, pathenv);
-	    pathtokens = tokenize(pathcp, ':');
+        if (pager == NULL) {
+            pathenv = getenv("PATH");
+            pathcp = malloc(strlen(pathenv)+1);
+            strcpy(pathcp, pathenv);
+            pathtokens = tokenize(pathcp, ':');
 
-	    for (i = 0; i < tokens_length(pathtokens); i++) {
-		if((tmp_str = malloc(strlen(pathtokens[i])+strlen("/less")+1)) != NULL){
-		    tmp_str[0] = '\0'; 
-		    strcat(tmp_str,pathtokens[i]);
-		    strcat(tmp_str,"/less");
+            for (i = 0; i < tokens_length(pathtokens); i++) {
+                if((tmp_str = malloc(strlen(pathtokens[i])+strlen("/less")+1)) != NULL){
+                    tmp_str[0] = '\0';
+                    strcat(tmp_str,pathtokens[i]);
+                    strcat(tmp_str,"/less");
 
-		    if (access(tmp_str, X_OK) != -1) {
-			pager = "less";
-			free(tmp_str);
-			break;
-		    }
-		    free(tmp_str);
-		}
-	    }
+                    if (access(tmp_str, X_OK) != -1) {
+                        pager = "less";
+                        free(tmp_str);
+                        break;
+                    }
+                    free(tmp_str);
+                }
+            }
 
-	    if (pager == NULL) pager = "more";
-	    free(pathcp);
-	    free(pathtokens);
-	}
+            if (pager == NULL) pager = "more";
+            free(pathcp);
+            free(pathtokens);
+        }
 
-	if (DEBUG) {
-	    printf("Pager: %s\n", pager);
-	}
+        if (DEBUG) {
+            printf("Pager: %s\n", pager);
+        }
 
-	if (tokens_length(firstparsed) > 1) {
-	    
-	} else {
-	    checkenv = malloc(sizeof(char*) * 3 + 1);
-	    checkenv[0] = "printenv";
-	    checkenv[1] = "sort";
-	    checkenv[2] = pager;
-	    checkenv[3] = NULL;
-	    fork_and_run(checkenv, bg);
-	}
-	
-	free(checkenv);
-	free(first);
-	free(firstparsed);
-	free(tokens);
+        if (tokens_length(firstparsed) > 1) {
+            tmp_str = malloc(sizeof(char*) * LIMIT + 1);
+            checkenv = malloc(sizeof(char*) * 4 + 1);
+
+            tmp_str[0] = '\0';
+            strcat(tmp_str, "grep ");
+            for (i = 1; firstparsed[i] != NULL; i++) {
+                strcat(tmp_str, firstparsed[i]);
+                strcat(tmp_str, " ");
+            }
+            checkenv[0] = "printenv";
+            checkenv[1] = tmp_str;
+            checkenv[2] = "sort";
+            checkenv[3] = pager;
+            checkenv[4] = NULL;
+            free(tmp_str);
+        } else {
+            checkenv = malloc(sizeof(char*) * 3 + 1);
+            checkenv[0] = "printenv";
+            checkenv[1] = "sort";
+            checkenv[2] = pager;
+            checkenv[3] = NULL;
+        }
+
+        fork_and_run(checkenv, bg);
+
+        free(checkenv);
+        free(first);
+        free(firstparsed);
+        free(tokens);
         return;
     }
 
+    /* run program */
     free(first);
     free(firstparsed);
     fork_and_run(tokens, bg);
