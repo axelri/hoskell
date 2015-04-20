@@ -5,11 +5,14 @@ PROG=hoskell
 
 all: hoskell
 
-hoskell: main.o
-	$(CC) main.o -o $(PROG)
+hoskell: main.o utils.o
+	$(CC) main.o utils.o -o $(PROG)
 
-main.o: main.c
+main.o: main.c utils.h defines.h
 	$(CC) $(LABFLAGS) main.c
+
+utils.o: utils.h defines.h
+	$(CC) $(LABFLAGS) utils.c
 
 clean:
 	rm *.o
