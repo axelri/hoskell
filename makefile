@@ -1,4 +1,4 @@
-CC=clang
+CC=gcc
 CFLAGS=-pedantic-errors -Wall -std=c89 -O0 -g -c
 PROG=hoskell
 

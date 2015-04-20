@@ -263,8 +263,8 @@ pid_t * setup_pipes(char **pipes) {
             if ((len-1) != i) {
                 /* redirect output to pipe of next child */
                 if (dup2(new_p[PIPE_WRITE], STDOUT_FILENO) == -1) {
-                        perror("Cannot dubplicate prev pipe and stdout");
-                        exit(1);
+		    perror("Cannot dubplicate prev pipe and stdout");
+		    exit(1);
                 }
             }
 
@@ -288,7 +288,7 @@ void fork_and_run(char **pipes, int bg) {
     int status, len, i;
     pid_t *children;
 
-    /* setup child processes and link together with pipes */
+    /* setup jkchild processes and link together with pipes */
     children = setup_pipes(pipes);
 
     /* don't wait if background flag is set */
@@ -321,11 +321,11 @@ void fork_and_run(char **pipes, int bg) {
  * a shell command or a program to be run
  */
 void exec_command(char **tokens, int bg) {
-    char *path, *first, **firstparsed;
-    int len;
+    char *path, *first, **firstparsed, **checkenv, *pager;
+    char *pathenv, *pathcp, **pathtokens;
+    char *tmp_str;
+    int i;
     pid_t parent;
-
-    len = tokens_length(tokens);
 
     /* copy the first command string and handle
      * this case specially - it might be a shell command */
@@ -334,10 +334,16 @@ void exec_command(char **tokens, int bg) {
     firstparsed = tokenize(first, ' ');
 
     if (strcmp(firstparsed[0], "") == 0) {
+	free(first);
+	free(firstparsed);
+	free(tokens);
         return;
     }
 
     if (strcmp(firstparsed[0], "exit") == 0) {
+	free(first);
+	free(firstparsed);
+	free(tokens);
         /* try to terminate all childs before exiting */
 
         /* send term to whole group, but ignore in parent */
@@ -373,25 +379,74 @@ void exec_command(char **tokens, int bg) {
 
         if (chdir(path) == -1) {
             fprintf(stderr, "Error: %s\n", strerror(errno));
-        };
+        }
+
+	free(first);
+	free(firstparsed);
+	free(tokens);
         return;
     }
 
     if (strcmp(firstparsed[0], "checkEnv") == 0) {
-        if (DEBUG) {
-            printf("Checking environment (printenv | sort | less)\n");
-        }
+	pager = getenv("PAGER");
+
+	if (pager == NULL) {
+	    pathenv = getenv("PATH"); 
+	    pathcp = malloc(strlen(pathenv)+1);
+	    strcpy(pathcp, pathenv);
+	    pathtokens = tokenize(pathcp, ':');
+
+	    for (i = 0; i < tokens_length(pathtokens); i++) {
+		if((tmp_str = malloc(strlen(pathtokens[i])+strlen("/less")+1)) != NULL){
+		    tmp_str[0] = '\0'; 
+		    strcat(tmp_str,pathtokens[i]);
+		    strcat(tmp_str,"/less");
+
+		    if (access(tmp_str, X_OK) != -1) {
+			pager = "less";
+			free(tmp_str);
+			break;
+		    }
+		    free(tmp_str);
+		}
+	    }
+
+	    if (pager == NULL) pager = "more";
+	    free(pathcp);
+	    free(pathtokens);
+	}
+
+	if (DEBUG) {
+	    printf("Pager: %s\n", pager);
+	}
+
+	if (tokens_length(firstparsed) > 1) {
+	    
+	} else {
+	    checkenv = malloc(sizeof(char*) * 3 + 1);
+	    checkenv[0] = "printenv";
+	    checkenv[1] = "sort";
+	    checkenv[2] = pager;
+	    checkenv[3] = NULL;
+	    fork_and_run(checkenv, bg);
+	}
+	
+	free(checkenv);
+	free(first);
+	free(firstparsed);
+	free(tokens);
         return;
     }
 
     free(first);
     free(firstparsed);
     fork_and_run(tokens, bg);
+    free(tokens);
 }
 
 int main(int argc, const char *argv[]) {
     char linebuf[LIMIT+1];
-    char *read, *cs;
+    char *read;
     char **tokens;
     int len, bg;
 
@@ -409,7 +464,6 @@ int main(int argc, const char *argv[]) {
 
     while (TRUE) {
         read = NULL;
-        cs = NULL;
         tokens = 0;
         bg = FALSE;
 
@@ -446,7 +500,6 @@ int main(int argc, const char *argv[]) {
 
         tokens = tokenize(linebuf, '|');
         exec_command(tokens, bg);
-        free(tokens);
     }
     return 0;
 }
