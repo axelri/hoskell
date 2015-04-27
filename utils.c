@@ -256,8 +256,8 @@ pid_t * setup_pipes(char **pipes) {
             if ((len-1) != i) {
                 /* redirect output to pipe of next child */
                 if (dup2(new_p[PIPE_WRITE], STDOUT_FILENO) == -1) {
-            perror("Cannot dubplicate prev pipe and stdout");
-            exit(1);
+                    perror("Cannot dubplicate prev pipe and stdout");
+                    exit(1);
                 }
             }
 
