@@ -161,8 +161,8 @@ int main(int argc, const char *argv[]) {
     int len, bg;
 
     #if SIGDET == 0
-    pid_t pid;
-    int status;
+    /*pid_t pid;
+    int status;*/
     #endif
 
     register_sighandler(SIGINT, parent_sigterm);
