@@ -13,6 +13,18 @@
 
 const char *prompt = "> ";
 
+void blockingwait(pid_t pid) {
+    pid_t ret;
+    int status;
+    /* wait for pid until exited */
+    while(TRUE) {
+        ret = waitpid(pid, &status, 0);
+        if (pid > 0 && (WIFEXITED(status) || WIFSIGNALED(status))) {
+            return;
+        }
+    }
+}
+
 void type_prompt() {
     printf("%s", prompt);
 }
@@ -67,7 +79,7 @@ void parent_sigchld(int signal_code) {
 
     /* could be already resolved in process, therefore no hang */
     pid = waitpid(-1, &status, WNOHANG);
-    if (pid > 0) {
+    if (pid > 0 && (WIFEXITED(status) || WIFSIGNALED(status))) {
         if (DEBUG) {
             printf("Signal\n");
         }
@@ -83,7 +95,9 @@ void poll_childs() {
         printf("Polling\n");
     }
     while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
-        print_child(pid);
+        if (WIFEXITED(status) || WIFSIGNALED(status)) {
+            print_child(pid);
+        }
     }
 }
 
@@ -256,8 +270,8 @@ pid_t * setup_pipes(char **pipes) {
             if ((len-1) != i) {
                 /* redirect output to pipe of next child */
                 if (dup2(new_p[PIPE_WRITE], STDOUT_FILENO) == -1) {
-            perror("Cannot dubplicate prev pipe and stdout");
-            exit(1);
+                    perror("Cannot dubplicate prev pipe and stdout");
+                    exit(1);
                 }
             }
 
@@ -278,7 +292,7 @@ pid_t * setup_pipes(char **pipes) {
  */
 void fork_and_run(char **pipes, int bg) {
     clock_t t1, t2;
-    int status, len, i;
+    int len, i;
     pid_t *children;
 
     /* setup jkchild processes and link together with pipes */
@@ -299,7 +313,7 @@ void fork_and_run(char **pipes, int bg) {
 
     /* wait for each child in order */
     for (i = 0; i < len; i++) {
-        waitpid(children[i], &status, 0);
+        blockingwait(children[i]);
     }
 
     t2 = clock();
