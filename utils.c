@@ -291,9 +291,10 @@ pid_t * setup_pipes(char **pipes) {
  * if the background flag is set
  */
 void fork_and_run(char **pipes, int bg) {
-    clock_t t1, t2;
     int len, i;
+    long elapsed;
     pid_t *children;
+    struct timeval t0, t1;
 
     /* setup jkchild processes and link together with pipes */
     children = setup_pipes(pipes);
@@ -309,17 +310,18 @@ void fork_and_run(char **pipes, int bg) {
     /* block SIGCHLD signal, as we want the wait to be
      * handled synchronously */
     sighold(SIGCHLD);
-    t1 = clock();
+    
+    gettimeofday(&t0, 0);
 
     /* wait for each child in order */
     for (i = 0; i < len; i++) {
         blockingwait(children[i]);
     }
 
-    t2 = clock();
-    printf("Start: %f, end: %f\n", t1, t2);
-    /*elapsed = 1000.0 * ((t2 - t1)/CLOCKS_PER_SEC);*/
-    printf("Execution time: %.8f ms\n", difftime(t2, t1));
+    gettimeofday(&t1, 0);
+
+    elapsed = (t1.tv_sec - t0.tv_sec) * 1000000 + t1.tv_usec - t0.tv_usec; 
+    printf("Execution time: %0.2f ms\n", (float)(elapsed/1000.0)); 
     sigrelse(SIGCHLD);
 
     free(children);
