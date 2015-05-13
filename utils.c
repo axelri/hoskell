@@ -317,7 +317,9 @@ void fork_and_run(char **pipes, int bg) {
     }
 
     t2 = clock();
-    printf("Execution time: %.2f ms\n", 1000.0*(t2-t1)/CLOCKS_PER_SEC);
+    printf("Start: %f, end: %f\n", t1, t2);
+    /*elapsed = 1000.0 * ((t2 - t1)/CLOCKS_PER_SEC);*/
+    printf("Execution time: %.8f ms\n", difftime(t2, t1));
     sigrelse(SIGCHLD);
 
     free(children);
