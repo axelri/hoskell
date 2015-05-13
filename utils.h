@@ -10,6 +10,7 @@ void type_prompt();
 void print_child(pid_t pid);
 void register_sighandler(int,  void (*) (int));
 void parent_sigterm(int);
+void parent_sigint(int);
 void parent_sigtstp(int);
 void parent_sigchld(int);
 void poll_childs();

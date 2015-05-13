@@ -165,7 +165,7 @@ int main(int argc, const char *argv[]) {
     int status;*/
     #endif
 
-    register_sighandler(SIGINT, parent_sigterm);
+    register_sighandler(SIGINT, parent_sigint);
     register_sighandler(SIGTSTP, parent_sigtstp);
 
     #if SIGDET == 1

@@ -58,6 +58,13 @@ void parent_sigterm(int signal_code) {
     return;
 }
 
+void parent_sigint(int signal_code) {
+    if (DEBUG) {
+        printf("\nSIGINT\n");
+    }
+    return;
+}
+
 /*
  * Parent handler for SIGTSP
  */
@@ -310,7 +317,7 @@ void fork_and_run(char **pipes, int bg) {
     /* block SIGCHLD signal, as we want the wait to be
      * handled synchronously */
     sighold(SIGCHLD);
-    
+
     gettimeofday(&t0, 0);
 
     /* wait for each child in order */
@@ -320,8 +327,8 @@ void fork_and_run(char **pipes, int bg) {
 
     gettimeofday(&t1, 0);
 
-    elapsed = (t1.tv_sec - t0.tv_sec) * 1000000 + t1.tv_usec - t0.tv_usec; 
-    printf("Execution time: %0.2f ms\n", (float)(elapsed/1000.0)); 
+    elapsed = (t1.tv_sec - t0.tv_sec) * 1000000 + t1.tv_usec - t0.tv_usec;
+    printf("Execution time: %0.2f ms\n", (float)(elapsed/1000.0));
     sigrelse(SIGCHLD);
 
     free(children);
