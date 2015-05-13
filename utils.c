@@ -19,7 +19,7 @@ void blockingwait(pid_t pid) {
     /* wait for pid until exited */
     while(TRUE) {
         ret = waitpid(pid, &status, 0);
-        if (pid > 0 && (WIFEXITED(status) || WIFSIGNALED(status))) {
+        if (ret > 0 && (WIFEXITED(status) || WIFSIGNALED(status))) {
             return;
         }
     }
