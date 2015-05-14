@@ -6,8 +6,8 @@
 #define TRUE 1
 #define FALSE 0
 #define LIMIT 80
-#define DEBUG 1
-#define SIGDET 0 
+#define DEBUG 0
+#define SIGDET 0
 #define PIPE_READ ( 0 )
 #define PIPE_WRITE ( 1 )
 

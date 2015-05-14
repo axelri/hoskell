@@ -18,8 +18,12 @@ void blockingwait(pid_t pid) {
     int status;
     /* wait for pid until exited */
     while(TRUE) {
-        ret = waitpid(pid, &status, 0);
+        ret = waitpid(pid, &status, WUNTRACED);
         if (ret > 0 && (WIFEXITED(status) || WIFSIGNALED(status))) {
+            return;
+        }
+        if (ret > 0 && WIFSTOPPED(status)) {
+            printf("Process %d suspended\n", ret);
             return;
         }
     }
@@ -54,15 +58,17 @@ void register_sighandler(int signal_code, void (*handler) (int) ) {
 void parent_sigterm(int signal_code) {
     if (DEBUG) {
         printf("\nSIGTERM\n");
+        return;
     }
-    return;
+    printf("\n");
 }
 
 void parent_sigint(int signal_code) {
     if (DEBUG) {
         printf("\nSIGINT\n");
+        return;
     }
-    return;
+    printf("\n");
 }
 
 /*
@@ -71,8 +77,9 @@ void parent_sigint(int signal_code) {
 void parent_sigtstp(int signal_code) {
     if (DEBUG) {
         printf("\nSIGTSTP\n");
+        return;
     }
-    return;
+    printf("\n");
 }
 
 /*
@@ -85,7 +92,7 @@ void parent_sigchld(int signal_code) {
     int status;
 
     /* could be already resolved in process, therefore no hang */
-    pid = waitpid(-1, &status, WNOHANG);
+    pid = waitpid(-1, &status, WNOHANG | WUNTRACED);
     if (pid > 0 && (WIFEXITED(status) || WIFSIGNALED(status))) {
         if (DEBUG) {
             printf("Signal\n");
@@ -101,7 +108,7 @@ void poll_childs() {
     if (DEBUG) {
         printf("Polling\n");
     }
-    while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+    while ((pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0) {
         if (WIFEXITED(status) || WIFSIGNALED(status)) {
             print_child(pid);
         }
