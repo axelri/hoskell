@@ -276,6 +276,9 @@ pid_t * setup_pipes(char **pipes) {
                 /* redirect stdin of previous child to pipe */
                 if (dup2(prev_p[PIPE_READ], STDIN_FILENO) == -1) {
                     perror("Cannot dubplicate prev pipe and stdin");
+                    /* try to clean up before exiting */
+                    close(prev_p[PIPE_READ]);
+                    close(new_p[PIPE_WRITE]);
                     exit(1);
                 }
             }
@@ -285,12 +288,16 @@ pid_t * setup_pipes(char **pipes) {
                 /* redirect output to pipe of next child */
                 if (dup2(new_p[PIPE_WRITE], STDOUT_FILENO) == -1) {
                     perror("Cannot dubplicate prev pipe and stdout");
+                    close(prev_p[PIPE_READ]);
+                    close(new_p[PIPE_WRITE]);
                     exit(1);
                 }
             }
 
             if (execvp(path, args) == -1) {
                 printf("Error: %s\n", strerror(errno));
+                close(prev_p[PIPE_READ]);
+                close(new_p[PIPE_WRITE]);
                 exit(1);
             }
         }
