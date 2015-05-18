@@ -101,6 +101,11 @@ void parent_sigchld(int signal_code) {
     }
 }
 
+/*
+ * Poll all children of the process (all processes in the same
+ * process group. Should probably be refactored to "poll_children"
+ *
+ */
 void poll_childs() {
     pid_t pid;
     int status;
@@ -319,7 +324,7 @@ void fork_and_run(char **pipes, int bg) {
     pid_t *children;
     struct timeval t0, t1;
 
-    /* setup jkchild processes and link together with pipes */
+    /* setup child processes and link together with pipes */
     children = setup_pipes(pipes);
 
     /* don't wait if background flag is set */
