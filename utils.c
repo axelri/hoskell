@@ -151,13 +151,15 @@ char** tokenize(char *command, char delim) {
     len = strlen(command);
 
     /* trim right */
-    while(command[len-1] == '\n' || command[len-1] == ' ') {
+    while((len > 0) &&
+          (command[len-1] == '\n' || command[len-1] == ' ')) {
         command[len-1] = '\0';
         len -= 1;
     }
 
     /* trim left */
-    while(command[0] == '\n' || command[0] == ' ') {
+    while((len > 0) &&
+          (command[0] == '\n' || command[0] == ' ')) {
         command[0] = '\0';
         len -= 1;
         command += 1;

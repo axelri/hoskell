@@ -197,13 +197,14 @@ int main(int argc, const char *argv[]) {
 
         /* trim whitespace right */
         len = strlen(linebuf);
-        while (linebuf[len-1] == '\n' || linebuf[len-1] == ' ') {
+        while ((len > 0) &&
+                (linebuf[len-1] == '\n' || linebuf[len-1] == ' ')) {
             linebuf[len-1] = '\0';
             len -= 1;
         }
 
         /* check for background flag */
-        if (linebuf[len-1] == '&') {
+        if (len > 0 && linebuf[len-1] == '&') {
             bg = TRUE;
             linebuf[len-1] = '\0';
             len -= 1;
