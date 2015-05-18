@@ -171,7 +171,7 @@ char** tokenize(char *command, char delim) {
     }
 
     tokens += 1;
-    ret = malloc(sizeof(char**)*tokens+1);
+    ret = malloc(sizeof(char**)*(tokens+1));
 
     if (tokens == 1) {
         ret[0] = command;
