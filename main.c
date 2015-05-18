@@ -114,8 +114,8 @@ void exec_command(char **tokens, int bg) {
             printf("Pager: %s\n", pager);
         }
 
+        tmp_str = malloc(sizeof(char*) * LIMIT + 1);
         if (tokens_length(firstparsed) > 1) {
-            tmp_str = malloc(sizeof(char*) * LIMIT + 1);
             checkenv = malloc(sizeof(char*) * 4 + 1);
 
             tmp_str[0] = '\0';
@@ -129,7 +129,7 @@ void exec_command(char **tokens, int bg) {
             checkenv[2] = "sort";
             checkenv[3] = pager;
             checkenv[4] = NULL;
-            free(tmp_str);
+            /*free(tmp_str);*/
         } else {
             checkenv = malloc(sizeof(char*) * 3 + 1);
             checkenv[0] = "printenv";
@@ -140,6 +140,7 @@ void exec_command(char **tokens, int bg) {
 
         fork_and_run(checkenv, bg);
 
+        free(tmp_str);
         free(checkenv);
         free(first);
         free(firstparsed);

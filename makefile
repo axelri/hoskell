@@ -20,10 +20,10 @@ hoskell: main.o utils.o
 	$(CC) main.o utils.o -o $(PROG)
 
 main.o: main.c utils.h defines.h
-	$(CC) $(CFLAGS) main.c
+	$(CC) $(LABFLAGS) main.c
 
 utils.o: utils.c utils.h defines.h
-	$(CC) $(CFLAGS) utils.c
+	$(CC) $(LABFLAGS) utils.c
 
 clean:
 	rm *.o
