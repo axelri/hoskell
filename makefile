@@ -3,27 +3,36 @@ UNAME := $(shell uname)
 ifeq ($(UNAME), Darwin)
 # OSX settings
 CC=clang
-CFLAGS=-pedantic-errors -Wall -std=c89 -O0 -g -c
-LABFLAGS=-pedantic -Wall -std=c89 -O3 -c
+CFLAGS=-D DEBUG -pedantic-errors -Wall -std=c89 -O0 -g
+LABFLAGS=-D DEBUG=0 -pedantic -Wall -std=c89 -O3
 else
 # assume linux otherwise
 CC=gcc
-CFLAGS=-pedantic-errors -Wall -ansi -O0 -g -c
-LABFLAGS=-pedantic -Wall -ansi -O4 -c
+CFLAGS=-D DEBUG -pedantic-errors -Wall -ansi -O0 -g
+LABFLAGS=-D DEBUG=0 -pedantic -Wall -ansi -O4
 endif
 
 PROG=hoskell
 
-all: hoskell
+all: lab
 
-hoskell: main.o utils.o
-	$(CC) main.o utils.o -o $(PROG)
+lab: lmain lutils
+	$(CC) $(LABFLAGS) main.o utils.o -o $(PROG)
 
-main.o: main.c utils.h defines.h
-	$(CC) $(LABFLAGS) main.c
+lmain: main.c utils.h defines.h
+	$(CC) $(LABFLAGS) -c main.c
 
-utils.o: utils.c utils.h defines.h
-	$(CC) $(LABFLAGS) utils.c
+lutils: utils.c utils.h defines.h
+	$(CC) $(LABFLAGS) -c utils.c
+
+debug: dmain dutils
+	$(CC) $(CFLAGS) main.o utils.o -o $(PROG)
+
+dmain: main.c utils.h defines.h
+	$(CC) $(CFLAGS) -c main.c
+
+dutils: utils.c utils.h defines.h
+	$(CC) $(CFLAGS) -c utils.c
 
 clean:
 	rm *.o
