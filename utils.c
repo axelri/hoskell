@@ -101,6 +101,11 @@ void parent_sigchld(int signal_code) {
     }
 }
 
+/*
+ * Poll all children of the process (all processes in the same
+ * process group. Should probably be refactored to "poll_children"
+ *
+ */
 void poll_childs() {
     pid_t pid;
     int status;

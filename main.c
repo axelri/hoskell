@@ -114,7 +114,13 @@ void exec_command(char **tokens, int bg) {
             printf("Pager: %s\n", pager);
         }
 
+        /* As our fork_and_run function takes an array of commands, we prepare an
+          array with these commands in the checkenv array */
+
+        /* tmp_str will become "grep <arguments>" if any arguments are passed to
+          checkEnv */
         tmp_str = malloc(sizeof(char*) * (LIMIT + 1));
+
         if (tokens_length(firstparsed) > 1) {
             checkenv = malloc(sizeof(char*) * (4 + 1));
 
@@ -129,7 +135,6 @@ void exec_command(char **tokens, int bg) {
             checkenv[2] = "sort";
             checkenv[3] = pager;
             checkenv[4] = NULL;
-            /*free(tmp_str);*/
         } else {
             checkenv = malloc(sizeof(char*) * (3 + 1));
             checkenv[0] = "printenv";
@@ -148,7 +153,8 @@ void exec_command(char **tokens, int bg) {
         return;
     }
 
-    /* run program */
+    /* what was wrote wasn't "cd", "exit" or "checkEnv". We still execute
+      the command. */
     free(first);
     free(firstparsed);
     fork_and_run(tokens, bg);
@@ -169,6 +175,8 @@ int main(int argc, const char *argv[]) {
     register_sighandler(SIGINT, parent_sigint);
     register_sighandler(SIGTSTP, parent_sigtstp);
 
+    /* SIGDET = 1 means that the child is responsible for reporting to
+      its parent when it's done so we register a sighandler for that */
     #if SIGDET == 1
     register_sighandler(SIGCHLD, parent_sigchld);
     #endif
