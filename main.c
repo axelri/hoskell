@@ -185,17 +185,17 @@ int main(int argc, const char *argv[]) {
         type_prompt();
         read = fgets(linebuf, LIMIT, stdin);
         if (read != linebuf) {
-            /* check if the user wants to quit */
+            /* end of file - quit as with exit command */
             if (feof(stdin)) {
-                printf("Bye!\n");
-                exit(0);
+                printf("^D\n");
+                strcpy(linebuf, "exit\n");
+            } else {
+                /* some interrupt, proceed to next read */
+                continue;
             }
-
-            /* some interrupt, proceed to next read */
-            continue;
         }
 
-        /* trim whitespace right */
+        /* trim whitespace right (in order to read flag later) */
         len = strlen(linebuf);
         while ((len > 0) &&
                 (linebuf[len-1] == '\n' || linebuf[len-1] == ' ')) {

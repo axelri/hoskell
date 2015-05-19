@@ -296,6 +296,8 @@ pid_t * setup_pipes(char **pipes) {
                 }
             }
 
+            /* make sure no signal is blocked in child */
+            sigrelse(SIGCHLD);
             if (execvp(path, args) == -1) {
                 printf("Error: %s\n", strerror(errno));
                 close(prev_p[PIPE_READ]);
@@ -319,20 +321,21 @@ void fork_and_run(char **pipes, int bg) {
     pid_t *children;
     struct timeval t0, t1;
 
-    /* setup jkchild processes and link together with pipes */
+    /* block SIGCHLD signal in parent, as we want the wait to be
+     * handled synchronously */
+    sighold(SIGCHLD);
+
+    /* setup child processes and link together with pipes */
     children = setup_pipes(pipes);
 
     /* don't wait if background flag is set */
     if (TRUE == bg) {
         free(children);
+        sigrelse(SIGCHLD);
         return;
     }
 
     len = tokens_length(pipes);
-
-    /* block SIGCHLD signal, as we want the wait to be
-     * handled synchronously */
-    sighold(SIGCHLD);
 
     gettimeofday(&t0, 0);
 
