@@ -93,6 +93,9 @@ void parent_sigchld(int signal_code) {
 
     /* could be already resolved in process, therefore no hang */
     pid = waitpid(-1, &status, WNOHANG | WUNTRACED);
+    if (DEBUG) {
+        printf("pid: %d, status: %d\n", pid, status);
+    }
     if (pid > 0 && (WIFEXITED(status) || WIFSIGNALED(status))) {
         if (DEBUG) {
             printf("Signal\n");
@@ -233,6 +236,7 @@ pid_t * setup_pipes(char **pipes) {
         if (DEBUG) {
             printf("Starting pipe [%s] ...\n", pipes[i]);
         }
+        
         args = tokenize(pipes[i], ' ');
         path = args[0];
 
@@ -352,7 +356,8 @@ void fork_and_run(char **pipes, int bg) {
     gettimeofday(&t1, 0);
 
     elapsed = (t1.tv_sec - t0.tv_sec) * 1000000 + t1.tv_usec - t0.tv_usec;
-    printf("Execution time: %0.2f ms\n", (float)(elapsed/1000.0));
+    if (strcmp(*pipes, "true"))
+        printf("Execution time: %0.2f ms\n", (float)(elapsed/1000.0));
     sigrelse(SIGCHLD);
 
     free(children);
