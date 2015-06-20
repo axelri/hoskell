@@ -92,12 +92,17 @@ void parent_sigchld(int signal_code) {
     int status;
 
     /* could be already resolved in process, therefore no hang */
-    pid = waitpid(-1, &status, WNOHANG | WUNTRACED);
-    if (pid > 0 && (WIFEXITED(status) || WIFSIGNALED(status))) {
-        if (DEBUG) {
-            printf("Signal\n");
+    while((pid = waitpid(-1, &status, WNOHANG | WUNTRACED)) > 0) {
+        if ((WIFEXITED(status) || WIFSIGNALED(status))) {
+            if (DEBUG) {
+                printf("Signal\n");
+            }
+            print_child(pid);
+        } else {
+            if (DEBUG) {
+                printf("Process %d changed status but did not exit\n", pid);
+            }
         }
-        print_child(pid);
     }
 }
 
