@@ -114,7 +114,13 @@ void exec_command(char **tokens, int bg) {
             printf("Pager: %s\n", pager);
         }
 
+        /* As our fork_and_run function takes an array of commands, we prepare an
+          array with these commands in the checkenv array */
+
+        /* tmp_str will become "grep <arguments>" if any arguments are passed to
+          checkEnv */
         tmp_str = malloc(sizeof(char*) * (LIMIT + 1));
+
         if (tokens_length(firstparsed) > 1) {
             checkenv = malloc(sizeof(char*) * (4 + 1));
 
@@ -129,7 +135,6 @@ void exec_command(char **tokens, int bg) {
             checkenv[2] = "sort";
             checkenv[3] = pager;
             checkenv[4] = NULL;
-            /*free(tmp_str);*/
         } else {
             checkenv = malloc(sizeof(char*) * (3 + 1));
             checkenv[0] = "printenv";
@@ -148,7 +153,8 @@ void exec_command(char **tokens, int bg) {
         return;
     }
 
-    /* run program */
+    /* what was wrote wasn't "cd", "exit" or "checkEnv". We still execute
+      the command. */
     free(first);
     free(firstparsed);
     fork_and_run(tokens, bg);
@@ -169,6 +175,8 @@ int main(int argc, const char *argv[]) {
     register_sighandler(SIGINT, parent_sigint);
     register_sighandler(SIGTSTP, parent_sigtstp);
 
+    /* SIGDET = 1 means that the child is responsible for reporting to
+      its parent when it's done so we register a sighandler for that */
     #if SIGDET == 1
     register_sighandler(SIGCHLD, parent_sigchld);
     #endif
@@ -185,17 +193,17 @@ int main(int argc, const char *argv[]) {
         type_prompt();
         read = fgets(linebuf, LIMIT, stdin);
         if (read != linebuf) {
-            /* check if the user wants to quit */
+            /* end of file - quit as with exit command */
             if (feof(stdin)) {
-                printf("Bye!\n");
-                exit(0);
+                printf("^D\n");
+                strcpy(linebuf, "exit\n");
+            } else {
+                /* some interrupt, proceed to next read */
+                continue;
             }
-
-            /* some interrupt, proceed to next read */
-            continue;
         }
 
-        /* trim whitespace right */
+        /* trim whitespace right (in order to read flag later) */
         len = strlen(linebuf);
         while ((len > 0) &&
                 (linebuf[len-1] == '\n' || linebuf[len-1] == ' ')) {
@@ -208,6 +216,17 @@ int main(int argc, const char *argv[]) {
             bg = TRUE;
             linebuf[len-1] = '\0';
             len -= 1;
+        }
+        
+        /* band aid fix */
+        if (len == 0) {
+            linebuf[0] = 't';
+            linebuf[1] = 'r';
+            linebuf[2] = 'u';
+            linebuf[3] = 'e';
+            linebuf[4] = '\n';
+            linebuf[5] = '\0';
+            len = 4;
         }
 
         tokens = tokenize(linebuf, '|');
