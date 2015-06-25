@@ -217,17 +217,6 @@ int main(int argc, const char *argv[]) {
             linebuf[len-1] = '\0';
             len -= 1;
         }
-        
-        /* band aid fix */
-        if (len == 0) {
-            linebuf[0] = 't';
-            linebuf[1] = 'r';
-            linebuf[2] = 'u';
-            linebuf[3] = 'e';
-            linebuf[4] = '\n';
-            linebuf[5] = '\0';
-            len = 4;
-        }
 
         tokens = tokenize(linebuf, '|');
         exec_command(tokens, bg);
